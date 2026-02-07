@@ -54,11 +54,8 @@ public class StorageService {
     }
 
     public StorageFileData getFile(Long ownerId, String storedName) {
-        StorageItem storageItem = repository.findByStoredNameAndDeletedAtIsNull(storedName)
-                .orElseThrow(() -> new StorageException("저장된 파일이 없습니다: " + storedName));
-        if (storageItem.isNotOwnedBy(ownerId)) {
-            throw new StorageException("접근 권한이 없습니다. ownerId: " + ownerId);
-        }
+        StorageItem storageItem = getByStoredName(storedName);
+        checkOwnership(ownerId, storageItem);
 
         Path filePath = createDirectoryPath(storedName).resolve(storedName);
         return new StorageFileData(
@@ -68,18 +65,26 @@ public class StorageService {
         );
     }
 
-    public void delete(Long ownerId, String storedName) {
-        StorageItem storageItem = repository.findByStoredNameAndDeletedAtIsNull(storedName)
+    private StorageItem getByStoredName(String storedName) {
+        return repository.findByStoredNameAndDeletedAtIsNull(storedName)
                 .orElseThrow(() -> new StorageException("저장된 파일이 없습니다: " + storedName));
-        if (storageItem.isNotOwnedBy(ownerId)) {
-            throw new StorageException("접근 권한이 없습니다. ownerId: " + ownerId);
-        }
+    }
+
+    public void delete(Long ownerId, String storedName) {
+        StorageItem storageItem = getByStoredName(storedName);
+        checkOwnership(ownerId, storageItem);
 
         Path filePath = createDirectoryPath(storedName).resolve(storedName);
         deleteFromDisk(storedName, filePath);
 
         storageItem.delete();
         repository.save(storageItem);
+    }
+
+    private void checkOwnership(Long ownerId, StorageItem storageItem) {
+        if (storageItem.isNotOwnedBy(ownerId)) {
+            throw new StorageException("접근 권한이 없습니다. ownerId: " + ownerId);
+        }
     }
 
     private void deleteFromDisk(String storedName, Path filePath) {
