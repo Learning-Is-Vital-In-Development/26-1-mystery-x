@@ -70,4 +70,13 @@ public class StorageController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(new FileSystemResource(fileData.file()));
     }
+
+    @DeleteMapping("/storage-items/{storedName}")
+    public ResponseEntity<Void> delete(
+            @RequestHeader("X-OWNER-ID") Long ownerId,
+            @PathVariable String storedName
+    ) {
+        storageService.delete(ownerId, storedName);
+        return ResponseEntity.ok().build();
+    }
 }
