@@ -27,16 +27,7 @@ public class StorageService {
 
     public void save(StorageItemCreate storageItemCreate) {
         String storedName = uuidGenerator.generate().toString();
-        String firstTwoChars = storedName.substring(0, 2);
-        String secondTwoChars = storedName.substring(2, 4);
-        Path path = Path.of(baseDir, firstTwoChars, secondTwoChars);
-
-        try (InputStream inputStream = storageItemCreate.content()) {
-            Files.createDirectories(path);
-            Files.copy(inputStream, path.resolve(storedName));
-        } catch (IOException e) {
-            throw new StorageException("Disk 저장 실패", e);
-        }
+        saveToDisk(storageItemCreate.content(), storedName);
 
         StorageItem storageItem = new StorageItem(
                 storageItemCreate.parentId(),
@@ -50,5 +41,21 @@ public class StorageService {
         );
 
         repository.save(storageItem);
+    }
+
+    private void saveToDisk(InputStream inputStream, String storedName) {
+        try (inputStream) {
+            Path path = createPath(storedName);
+            Files.createDirectories(path);
+            Files.copy(inputStream, path.resolve(storedName));
+        } catch (IOException e) {
+            throw new StorageException("Disk 저장 실패", e);
+        }
+    }
+
+    private Path createPath(String storedName) {
+        String firstTwoChars = storedName.substring(0, 2);
+        String secondTwoChars = storedName.substring(2, 4);
+        return Path.of(baseDir, firstTwoChars, secondTwoChars);
     }
 }
