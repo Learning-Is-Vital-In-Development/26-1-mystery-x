@@ -3,31 +3,27 @@ package c4.mystorage.application;
 import c4.mystorage.common.StorageException;
 import c4.mystorage.common.UuidGenerator;
 import c4.mystorage.domain.StorageItem;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 @Service
 public class StorageService {
     private final UuidGenerator uuidGenerator;
     private final StorageItemRepository repository;
-    private final String baseDir;
+    private final FileManager fileManager;
 
     public StorageService(UuidGenerator uuidGenerator,
                           StorageItemRepository repository,
-                          @Value("${storage.base-dir}") String baseDir) {
+                          FileManager fileManager) {
         this.uuidGenerator = uuidGenerator;
         this.repository = repository;
-        this.baseDir = baseDir;
+        this.fileManager = fileManager;
     }
 
     public void save(StorageItemCreate storageItemCreate) {
         String storedName = uuidGenerator.generate().toString();
-        saveToDisk(storageItemCreate.content(), storedName);
+        fileManager.save(storageItemCreate.content(), storedName);
 
         StorageItem storageItem = new StorageItem(
                 storageItemCreate.parentId(),
@@ -43,21 +39,11 @@ public class StorageService {
         repository.save(storageItem);
     }
 
-    private void saveToDisk(InputStream inputStream, String storedName) {
-        try (inputStream) {
-            Path directoryPath = createDirectoryPath(storedName);
-            Files.createDirectories(directoryPath);
-            Files.copy(inputStream, directoryPath.resolve(storedName));
-        } catch (IOException e) {
-            throw new StorageException("Disk 저장 실패", e);
-        }
-    }
-
     public StorageFileData getFile(Long ownerId, String storedName) {
         StorageItem storageItem = getByStoredName(storedName);
         checkOwnership(ownerId, storageItem);
 
-        Path filePath = createDirectoryPath(storedName).resolve(storedName);
+        Path filePath = fileManager.resolvePath(storedName);
         return new StorageFileData(
                 filePath.toFile(),
                 storageItem.getDisplayName(),
@@ -74,8 +60,7 @@ public class StorageService {
         StorageItem storageItem = getByStoredName(storedName);
         checkOwnership(ownerId, storageItem);
 
-        Path filePath = createDirectoryPath(storedName).resolve(storedName);
-        deleteFromDisk(storedName, filePath);
+        fileManager.delete(storedName);
 
         storageItem.delete();
         repository.save(storageItem);
@@ -85,19 +70,5 @@ public class StorageService {
         if (storageItem.isNotOwnedBy(ownerId)) {
             throw new StorageException("접근 권한이 없습니다. ownerId: " + ownerId);
         }
-    }
-
-    private void deleteFromDisk(String storedName, Path filePath) {
-        try {
-            Files.deleteIfExists(filePath);
-        } catch (IOException e) {
-            throw new StorageException("파일 삭제 실패: " + storedName, e);
-        }
-    }
-
-    private Path createDirectoryPath(String storedName) {
-        String firstTwoChars = storedName.substring(0, 2);
-        String secondTwoChars = storedName.substring(2, 4);
-        return Path.of(baseDir, firstTwoChars, secondTwoChars);
     }
 }

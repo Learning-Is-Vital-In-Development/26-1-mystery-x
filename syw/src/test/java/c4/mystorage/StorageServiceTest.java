@@ -1,9 +1,6 @@
 package c4.mystorage;
 
-import c4.mystorage.application.StorageFileData;
-import c4.mystorage.application.StorageItemCreate;
-import c4.mystorage.application.StorageItemRepository;
-import c4.mystorage.application.StorageService;
+import c4.mystorage.application.*;
 import c4.mystorage.common.StorageException;
 import c4.mystorage.domain.ItemType;
 import c4.mystorage.domain.StorageItem;
@@ -31,6 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 class StorageServiceTest {
     @Autowired
     private StorageItemRepository repository;
+    @Autowired
+    private FileManager fileManager;
 
     @Value("${storage.base-dir}")
     private String baseDir;
@@ -66,7 +65,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 () -> storedName,
                 repository,
-                baseDir
+                fileManager
         );
         storageService.save(create);
 
@@ -101,7 +100,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 () -> storedName,
                 repository,
-                baseDir
+                fileManager
         );
         storageService.save(create);
 
@@ -127,7 +126,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 UUID::randomUUID,
                 repository,
-                baseDir
+                fileManager
         );
 
         String storedName = "missing-stored-name";
@@ -158,7 +157,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 UUID::randomUUID,
                 repository,
-                baseDir
+                fileManager
         );
 
         assertThatThrownBy(() -> storageService.getFile(200L, storedName))
@@ -188,7 +187,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 UUID::randomUUID,
                 repository,
-                baseDir
+                fileManager
         );
 
         StorageFileData fileData = storageService.getFile(10L, storedName);
@@ -223,7 +222,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 UUID::randomUUID,
                 repository,
-                baseDir
+                fileManager
         );
 
         storageService.delete(30L, storedName);
@@ -252,7 +251,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 UUID::randomUUID,
                 repository,
-                baseDir
+                fileManager
         );
 
         storageService.delete(40L, storedName);
@@ -288,7 +287,7 @@ class StorageServiceTest {
         StorageService storageService = new StorageService(
                 UUID::randomUUID,
                 repository,
-                baseDir
+                fileManager
         );
 
         assertThatThrownBy(() -> storageService.getFile(50L, storedName))
