@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: mystorage
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/mystorage
+    username: root
+    password: root_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
