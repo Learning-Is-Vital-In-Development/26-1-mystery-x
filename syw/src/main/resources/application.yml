@@ -8,3 +8,9 @@ spring:
     password: root_password
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+  sql:
+    init:
+      mode: always
+
+storage:
+  base-dir: data/storage/uploads
