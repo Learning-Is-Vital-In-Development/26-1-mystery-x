@@ -6,5 +6,5 @@ import org.springframework.data.repository.CrudRepository;
 import java.util.Optional;
 
 public interface StorageItemRepository extends CrudRepository<StorageItem, Long> {
-    Optional<StorageItem> findByStoredName(String storedName);
+    Optional<StorageItem> findByStoredNameAndDeletedAtIsNull(String storedName);
 }
