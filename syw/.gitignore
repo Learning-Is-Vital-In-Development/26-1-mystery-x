@@ -38,3 +38,7 @@ out/
 
 ### MacOS ###
 ../.DS_Store
+
+
+### test data ###
+/data/**

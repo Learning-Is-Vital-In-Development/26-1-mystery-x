@@ -1,0 +1,41 @@
+### 파일 저장
+POST http://localhost:8080/storage-items
+X-OWNER-ID: 1
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+hello world
+--boundary
+Content-Disposition: form-data; name="payload"; filename="payload.json"
+Content-Type: application/json
+
+{"parentId": null, "filename": "test.txt", "itemType": "FILE", "extraMetadata": null}
+--boundary--
+
+### 이미지 저장
+POST http://localhost:8080/storage-items
+X-OWNER-ID: 1
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="dog.jpeg"
+Content-Type: image/jpeg
+
+< dog.jpeg
+--boundary
+Content-Disposition: form-data; name="payload"; filename="payload.json"
+Content-Type: application/json
+
+{"parentId": null, "filename": "dog.jpeg", "itemType": "FILE", "extraMetadata": null}
+--boundary--
+
+### 파일 다운로드
+GET http://localhost:8080/storage-items/569faee0-8fa8-4917-9ff6-18147b7704f7
+X-OWNER-ID: 1
+
+### 파일 삭제
+DELETE http://localhost:8080/storage-items/569faee0-8fa8-4917-9ff6-18147b7704f7
+X-OWNER-ID: 1
