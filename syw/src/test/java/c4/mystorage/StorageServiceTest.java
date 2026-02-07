@@ -202,6 +202,101 @@ class StorageServiceTest {
         );
     }
 
+    @DisplayName("파일 삭제 시 디스크에서 파일이 제거된다")
+    @Test
+    void deleteRemovesFileFromDisk() throws IOException {
+        String storedName = "dddd1111-2222-3333-4444-555555555555";
+        byte[] content = "to-delete".getBytes(StandardCharsets.UTF_8);
+        Path filePath = writeFile(storedName, content);
+
+        repository.save(new StorageItem(
+                1L,
+                30L,
+                "delete.txt",
+                storedName,
+                (long) content.length,
+                ItemType.FILE,
+                "text/plain",
+                null
+        ));
+
+        StorageService storageService = new StorageService(
+                UUID::randomUUID,
+                repository,
+                baseDir
+        );
+
+        storageService.delete(30L, storedName);
+
+        assertThat(Files.exists(filePath)).isFalse();
+    }
+
+    @DisplayName("파일 삭제 시 StorageItem의 deletedAt에 값이 기록된다")
+    @Test
+    void deleteSetsDeletedAt() throws IOException {
+        String storedName = "eeee1111-2222-3333-4444-666666666666";
+        byte[] content = "mark-deleted".getBytes(StandardCharsets.UTF_8);
+        Path filePath = writeFile(storedName, content);
+
+        StorageItem savedItem = repository.save(new StorageItem(
+                1L,
+                40L,
+                "mark.txt",
+                storedName,
+                (long) content.length,
+                ItemType.FILE,
+                "text/plain",
+                null
+        ));
+
+        StorageService storageService = new StorageService(
+                UUID::randomUUID,
+                repository,
+                baseDir
+        );
+
+        storageService.delete(40L, storedName);
+
+        StorageItem item = repository.findById(savedItem.getId())
+                .orElseThrow();
+        assertAll(
+                () -> assertThat(Files.exists(filePath)).isFalse(),
+                () -> assertThat(item.getDeletedAt()).isNotNull()
+        );
+    }
+
+    @DisplayName("이미 삭제된 파일은 조회되지 않고 에러가 발생한다")
+    @Test
+    void getFileThrowsWhenAlreadyDeleted() throws IOException {
+        String storedName = "ffff1111-2222-3333-4444-777777777777";
+        byte[] content = "already-deleted".getBytes(StandardCharsets.UTF_8);
+        writeFile(storedName, content);
+
+        StorageItem storageItem = new StorageItem(
+                1L,
+                50L,
+                "deleted.txt",
+                storedName,
+                (long) content.length,
+                ItemType.FILE,
+                "text/plain",
+                null
+        );
+        storageItem.delete();
+        repository.save(storageItem);
+
+        StorageService storageService = new StorageService(
+                UUID::randomUUID,
+                repository,
+                baseDir
+        );
+
+        assertThatThrownBy(() -> storageService.getFile(50L, storedName))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("저장된 파일이 없습니다")
+                .hasMessageContaining(storedName);
+    }
+
     private Path writeFile(String storedName, byte[] content) throws IOException {
         String firstTwoChars = storedName.substring(0, 2);
         String secondTwoChars = storedName.substring(2, 4);

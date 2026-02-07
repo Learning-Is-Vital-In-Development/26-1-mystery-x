@@ -50,4 +50,8 @@ public class StorageItem {
     public boolean isNotOwnedBy(Long ownerId) {
         return !this.ownerId.equals(ownerId);
     }
+
+    public void delete() {
+        this.deletedAt = LocalDateTime.now();
+    }
 }
