@@ -1,5 +1,6 @@
 package c4.mystorage.application;
 
+import c4.mystorage.common.StorageException;
 import c4.mystorage.common.UuidGenerator;
 import c4.mystorage.domain.StorageItem;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,7 +35,7 @@ public class StorageService {
             Files.createDirectories(path);
             Files.copy(inputStream, path.resolve(storedName));
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new StorageException("Disk 저장 실패", e);
         }
 
         StorageItem storageItem = new StorageItem(
