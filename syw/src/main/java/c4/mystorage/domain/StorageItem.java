@@ -46,4 +46,8 @@ public class StorageItem {
         this.contentType = contentType;
         this.extraMetadata = extraMetadata;
     }
+
+    public boolean isNotOwnedBy(Long ownerId) {
+        return !this.ownerId.equals(ownerId);
+    }
 }

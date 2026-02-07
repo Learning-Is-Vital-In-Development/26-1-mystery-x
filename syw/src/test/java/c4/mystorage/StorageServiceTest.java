@@ -1,8 +1,10 @@
 package c4.mystorage;
 
+import c4.mystorage.application.StorageFileData;
 import c4.mystorage.application.StorageItemCreate;
 import c4.mystorage.application.StorageItemRepository;
 import c4.mystorage.application.StorageService;
+import c4.mystorage.common.StorageException;
 import c4.mystorage.domain.ItemType;
 import c4.mystorage.domain.StorageItem;
 import org.junit.jupiter.api.AfterEach;
@@ -22,6 +24,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertAll;
 
 @SpringBootTest
@@ -116,6 +119,97 @@ class StorageServiceTest {
                 () -> assertThat(item.getContentType()).isEqualTo("image/png"),
                 () -> assertThat(item.getExtraMetadata()).isEqualTo("{\"origin\":\"camera\"}")
         );
+    }
+
+    @DisplayName("없는 storedName을 조회하면 에러가 발생한다")
+    @Test
+    void getFileThrowsWhenMissing() {
+        StorageService storageService = new StorageService(
+                UUID::randomUUID,
+                repository,
+                baseDir
+        );
+
+        String storedName = "missing-stored-name";
+        assertThatThrownBy(() -> storageService.getFile(1L, storedName))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("저장된 파일이 없습니다")
+                .hasMessageContaining(storedName);
+    }
+
+    @DisplayName("파일은 있지만 ownerId가 다르면 에러가 발생한다")
+    @Test
+    void getFileThrowsWhenOwnerIdMismatch() throws IOException {
+        String storedName = "abcd1234-1111-2222-3333-444444444444";
+        byte[] content = "owner-mismatch".getBytes(StandardCharsets.UTF_8);
+        writeFile(storedName, content);
+
+        repository.save(new StorageItem(
+                1L,
+                100L,
+                "sample.txt",
+                storedName,
+                (long) content.length,
+                ItemType.FILE,
+                "text/plain",
+                null
+        ));
+
+        StorageService storageService = new StorageService(
+                UUID::randomUUID,
+                repository,
+                baseDir
+        );
+
+        assertThatThrownBy(() -> storageService.getFile(200L, storedName))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("접근 권한이 없습니다")
+                .hasMessageContaining("ownerId: 200");
+    }
+
+    @DisplayName("ownerId가 일치하면 storedName 기반 파일을 반환한다")
+    @Test
+    void getFileReturnsStoredFileWhenMatch() throws IOException {
+        String storedName = "beefcafe-aaaa-bbbb-cccc-ddddeeeeeeee";
+        byte[] content = "stored-file".getBytes(StandardCharsets.UTF_8);
+        Path expectedPath = writeFile(storedName, content);
+
+        repository.save(new StorageItem(
+                1L,
+                10L,
+                "report.pdf",
+                storedName,
+                (long) content.length,
+                ItemType.FILE,
+                "application/pdf",
+                null
+        ));
+
+        StorageService storageService = new StorageService(
+                UUID::randomUUID,
+                repository,
+                baseDir
+        );
+
+        StorageFileData fileData = storageService.getFile(10L, storedName);
+        assertAll(
+                () -> assertThat(fileData.file()).isNotNull()
+                        .exists()
+                        .isEqualTo(expectedPath.toFile()),
+                () -> assertThat(fileData.displayName()).isEqualTo("report.pdf"),
+                () -> assertThat(fileData.contentType()).isEqualTo("application/pdf"),
+                () -> assertThat(Files.readAllBytes(expectedPath)).isEqualTo(content)
+        );
+    }
+
+    private Path writeFile(String storedName, byte[] content) throws IOException {
+        String firstTwoChars = storedName.substring(0, 2);
+        String secondTwoChars = storedName.substring(2, 4);
+        Path dir = Path.of(baseDir, firstTwoChars, secondTwoChars);
+        Files.createDirectories(dir);
+        Path filePath = dir.resolve(storedName);
+        Files.write(filePath, content);
+        return filePath;
     }
 
     private void deleteBaseDir() throws IOException {

@@ -53,6 +53,22 @@ public class StorageService {
         }
     }
 
+    public StorageFileData getFile(Long ownerId, String storedName) {
+        StorageItem storageItem = repository.findByStoredName(storedName)
+                .orElseThrow(() -> new StorageException("저장된 파일이 없습니다: " + storedName));
+
+        if (storageItem.isNotOwnedBy(ownerId)) {
+            throw new StorageException("접근 권한이 없습니다. ownerId: " + ownerId);
+        }
+
+        Path filePath = createDirectoryPath(storedName).resolve(storedName);
+        return new StorageFileData(
+                filePath.toFile(),
+                storageItem.getDisplayName(),
+                storageItem.getContentType()
+        );
+    }
+
     private Path createDirectoryPath(String storedName) {
         String firstTwoChars = storedName.substring(0, 2);
         String secondTwoChars = storedName.substring(2, 4);
