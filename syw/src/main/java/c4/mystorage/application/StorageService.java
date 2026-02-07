@@ -45,15 +45,15 @@ public class StorageService {
 
     private void saveToDisk(InputStream inputStream, String storedName) {
         try (inputStream) {
-            Path path = createPath(storedName);
-            Files.createDirectories(path);
-            Files.copy(inputStream, path.resolve(storedName));
+            Path directoryPath = createDirectoryPath(storedName);
+            Files.createDirectories(directoryPath);
+            Files.copy(inputStream, directoryPath.resolve(storedName));
         } catch (IOException e) {
             throw new StorageException("Disk 저장 실패", e);
         }
     }
 
-    private Path createPath(String storedName) {
+    private Path createDirectoryPath(String storedName) {
         String firstTwoChars = storedName.substring(0, 2);
         String secondTwoChars = storedName.substring(2, 4);
         return Path.of(baseDir, firstTwoChars, secondTwoChars);
