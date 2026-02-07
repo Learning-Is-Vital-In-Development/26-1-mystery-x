@@ -1,5 +1,7 @@
-package c4.mystorage;
+package c4.mystorage.presentation;
 
+import c4.mystorage.application.StorageItemCreate;
+import c4.mystorage.application.StorageService;
 import org.apache.tika.Tika;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

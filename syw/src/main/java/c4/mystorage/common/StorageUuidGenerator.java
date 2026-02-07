@@ -1,4 +1,4 @@
-package c4.mystorage;
+package c4.mystorage.common;
 
 import org.springframework.stereotype.Component;
 

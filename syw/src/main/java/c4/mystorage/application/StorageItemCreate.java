@@ -1,4 +1,6 @@
-package c4.mystorage;
+package c4.mystorage.application;
+
+import c4.mystorage.domain.ItemType;
 
 import java.io.InputStream;
 

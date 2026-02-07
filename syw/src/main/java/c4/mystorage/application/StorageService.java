@@ -1,5 +1,7 @@
-package c4.mystorage;
+package c4.mystorage.application;
 
+import c4.mystorage.common.UuidGenerator;
+import c4.mystorage.domain.StorageItem;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 

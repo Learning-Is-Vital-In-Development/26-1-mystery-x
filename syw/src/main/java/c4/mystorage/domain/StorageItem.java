@@ -1,4 +1,4 @@
-package c4.mystorage;
+package c4.mystorage.domain;
 
 import lombok.Getter;
 import org.springframework.data.annotation.CreatedDate;
