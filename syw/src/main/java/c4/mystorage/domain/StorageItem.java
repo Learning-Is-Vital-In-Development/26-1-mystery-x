@@ -29,6 +29,9 @@ public class StorageItem {
     private LocalDateTime updatedAt;
     private LocalDateTime deletedAt;
 
+    public StorageItem() {
+    }
+
     public StorageItem(Long parentId,
                        Long ownerId,
                        String displayName,
