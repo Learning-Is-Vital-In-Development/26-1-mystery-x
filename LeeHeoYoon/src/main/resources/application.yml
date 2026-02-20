@@ -14,6 +14,9 @@ spring:
       resolve-lazily: true
       location: /data/storage/.tmp
 
+  thymeleaf:
+    cache: false
+
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/mystorage}
     username: ${DB_USERNAME:mystorage}

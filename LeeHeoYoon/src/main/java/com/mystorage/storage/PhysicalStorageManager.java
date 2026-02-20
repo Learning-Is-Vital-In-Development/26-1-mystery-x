@@ -49,4 +49,8 @@ public class PhysicalStorageManager {
         Path targetPath = baseDir.resolve(target.toString());
         Files.copy(sourcePath, targetPath);
     }
+
+    public Path getStoredFilePath(UUID storedName) {
+        return baseDir.resolve(storedName.toString());
+    }
 }
