@@ -2,6 +2,7 @@ package c4.mystorage.application;
 
 import c4.mystorage.common.StorageException;
 import c4.mystorage.common.UuidGenerator;
+import c4.mystorage.domain.ItemType;
 import c4.mystorage.domain.StorageItem;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,38 @@ public class StorageService {
         this.uuidGenerator = uuidGenerator;
         this.repository = repository;
         this.fileManager = fileManager;
+    }
+
+    public StorageItem createFolder(Long ownerId, String name, Long parentId) {
+        if (parentId != null) {
+            validateParentFolder(ownerId, parentId);
+        }
+        validateNoDuplicateFolder(ownerId, parentId, name);
+
+        StorageItem folder = new StorageItem(
+                parentId,
+                ownerId,
+                name,
+                null,
+                0L,
+                ItemType.DIRECTORY,
+                null,
+                null
+        );
+        return repository.save(folder);
+    }
+
+    private void validateParentFolder(Long ownerId, Long parentId) {
+        StorageItem parent = repository.findByIdAndItemTypeAndDeletedAtIsNull(parentId, ItemType.DIRECTORY.name())
+                .orElseThrow(() -> new StorageException("부모 폴더를 찾을 수 없습니다: " + parentId));
+        checkOwnership(ownerId, parent);
+    }
+
+    private void validateNoDuplicateFolder(Long ownerId, Long parentId, String name) {
+        if (repository.existsByOwnerAndParentAndNameAndType(
+                ownerId, parentId, name, ItemType.DIRECTORY.name())) {
+            throw new StorageException("이미 존재하는 폴더입니다: " + name);
+        }
     }
 
     public void save(StorageItemCreate storageItemCreate) {

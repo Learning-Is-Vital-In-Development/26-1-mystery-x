@@ -54,6 +54,10 @@ public class StorageItem {
         return !this.ownerId.equals(ownerId);
     }
 
+    public void rename(String newDisplayName) {
+        this.displayName = newDisplayName;
+    }
+
     public void delete() {
         this.deletedAt = LocalDateTime.now();
     }
