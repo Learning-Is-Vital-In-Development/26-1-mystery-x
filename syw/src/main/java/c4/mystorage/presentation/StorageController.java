@@ -38,6 +38,16 @@ public class StorageController {
         return ResponseEntity.ok(FolderResponse.from(folder));
     }
 
+    @PatchMapping("/folders/{folderId}")
+    public ResponseEntity<Void> renameFolder(
+            @RequestHeader("X-OWNER-ID") Long ownerId,
+            @PathVariable Long folderId,
+            @RequestBody FolderRenameRequest request
+    ) {
+        storageService.renameFolder(ownerId, folderId, request.name());
+        return ResponseEntity.ok().build();
+    }
+
     @PostMapping(path = "/storage-items", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Void> save(
             @RequestHeader("X-OWNER-ID") Long ownerId,

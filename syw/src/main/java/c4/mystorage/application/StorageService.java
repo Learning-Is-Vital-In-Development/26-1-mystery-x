@@ -54,6 +54,19 @@ public class StorageService {
         }
     }
 
+    public void renameFolder(Long ownerId, Long folderId, String newName) {
+        StorageItem folder = repository.findByIdAndItemTypeAndDeletedAtIsNull(folderId, ItemType.DIRECTORY.name())
+                .orElseThrow(() -> new StorageException("폴더를 찾을 수 없습니다: " + folderId));
+
+        checkOwnership(ownerId, folder);
+
+        if (!folder.getDisplayName().equals(newName)) {
+            validateNoDuplicateFolder(ownerId, folder.getParentId(), newName);
+            folder.rename(newName);
+            repository.save(folder);
+        }
+    }
+
     public void save(StorageItemCreate storageItemCreate) {
         String storedName = uuidGenerator.generate().toString();
         fileManager.save(storageItemCreate.content(), storedName);
