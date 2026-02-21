@@ -5,6 +5,7 @@ import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface StorageItemRepository extends CrudRepository<StorageItem, Long> {
@@ -26,4 +27,15 @@ public interface StorageItemRepository extends CrudRepository<StorageItem, Long>
             @Param("parentId") Long parentId,
             @Param("displayName") String displayName,
             @Param("itemType") String itemType);
+
+    @Query("SELECT * FROM storage_item " +
+           "WHERE owner_id = :ownerId AND parent_id = :parentId AND deleted_at IS NULL")
+    List<StorageItem> findByOwnerIdAndParentIdAndDeletedAtIsNull(
+            @Param("ownerId") Long ownerId,
+            @Param("parentId") Long parentId);
+
+    @Query("SELECT * FROM storage_item " +
+           "WHERE owner_id = :ownerId AND parent_id IS NULL AND deleted_at IS NULL")
+    List<StorageItem> findByOwnerIdAndParentIdIsNullAndDeletedAtIsNull(
+            @Param("ownerId") Long ownerId);
 }

@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @RestController
 public class StorageController {
@@ -46,6 +47,29 @@ public class StorageController {
     ) {
         storageService.renameFolder(ownerId, folderId, request.name());
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/folders/{folderId}/items")
+    public ResponseEntity<List<StorageItemResponse>> listFolderItems(
+            @RequestHeader("X-OWNER-ID") Long ownerId,
+            @PathVariable Long folderId
+    ) {
+        List<StorageItem> items = storageService.listFolder(ownerId, folderId);
+        List<StorageItemResponse> responses = items.stream()
+                .map(StorageItemResponse::from)
+                .toList();
+        return ResponseEntity.ok(responses);
+    }
+
+    @GetMapping("/folders/root/items")
+    public ResponseEntity<List<StorageItemResponse>> listRootItems(
+            @RequestHeader("X-OWNER-ID") Long ownerId
+    ) {
+        List<StorageItem> items = storageService.listFolder(ownerId, null);
+        List<StorageItemResponse> responses = items.stream()
+                .map(StorageItemResponse::from)
+                .toList();
+        return ResponseEntity.ok(responses);
     }
 
     @PostMapping(path = "/storage-items", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -7,6 +7,7 @@ import c4.mystorage.domain.StorageItem;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
+import java.util.List;
 
 @Service
 public class StorageService {
@@ -65,6 +66,17 @@ public class StorageService {
             folder.rename(newName);
             repository.save(folder);
         }
+    }
+
+    public List<StorageItem> listFolder(Long ownerId, Long parentId) {
+        if (parentId != null) {
+            StorageItem folder = repository.findByIdAndItemTypeAndDeletedAtIsNull(
+                            parentId, ItemType.DIRECTORY.name())
+                    .orElseThrow(() -> new StorageException("폴더를 찾을 수 없습니다: " + parentId));
+            checkOwnership(ownerId, folder);
+            return repository.findByOwnerIdAndParentIdAndDeletedAtIsNull(ownerId, parentId);
+        }
+        return repository.findByOwnerIdAndParentIdIsNullAndDeletedAtIsNull(ownerId);
     }
 
     public void save(StorageItemCreate storageItemCreate) {
