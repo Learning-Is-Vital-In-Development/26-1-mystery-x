@@ -61,7 +61,7 @@ public class StorageService {
 
         checkOwnership(ownerId, folder);
 
-        if (!folder.getDisplayName().equals(newName)) {
+        if (folder.hasDifferentName(newName)) {
             validateNoDuplicateFolder(ownerId, folder.getParentId(), newName);
             folder.rename(newName);
             repository.save(folder);

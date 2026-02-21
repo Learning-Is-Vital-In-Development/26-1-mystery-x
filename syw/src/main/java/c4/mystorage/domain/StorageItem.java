@@ -54,6 +54,10 @@ public class StorageItem {
         return !this.ownerId.equals(ownerId);
     }
 
+    public boolean hasDifferentName(String name) {
+        return !this.displayName.equals(name);
+    }
+
     public void rename(String newDisplayName) {
         this.displayName = newDisplayName;
     }
