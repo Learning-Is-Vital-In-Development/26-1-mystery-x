@@ -80,6 +80,10 @@ public class StorageService {
     }
 
     public void save(StorageItemCreate storageItemCreate) {
+        if (storageItemCreate.parentId() != null) {
+            validateParentFolder(storageItemCreate.ownerId(), storageItemCreate.parentId());
+        }
+
         String storedName = uuidGenerator.generate().toString();
         fileManager.save(storageItemCreate.content(), storedName);
 

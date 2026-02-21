@@ -52,7 +52,7 @@ class StorageServiceTest {
         UUID storedName = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
         byte[] content = "hello-storage".getBytes(StandardCharsets.UTF_8);
         StorageItemCreate create = new StorageItemCreate(
-                10L,
+                null,
                 20L,
                 "hello.txt",
                 new ByteArrayInputStream(content),
@@ -87,7 +87,7 @@ class StorageServiceTest {
         byte[] content = "data-blob".getBytes(StandardCharsets.UTF_8);
 
         StorageItemCreate create = new StorageItemCreate(
-                1L,
+                null,
                 2L,
                 "photo.png",
                 new ByteArrayInputStream(content),
@@ -109,7 +109,7 @@ class StorageServiceTest {
 
         StorageItem item = items.iterator().next();
         assertAll(
-                () -> assertThat(item.getParentId()).isEqualTo(1L),
+                () -> assertThat(item.getParentId()).isNull(),
                 () -> assertThat(item.getOwnerId()).isEqualTo(2L),
                 () -> assertThat(item.getDisplayName()).isEqualTo("photo.png"),
                 () -> assertThat(item.getStoredName()).isEqualTo(storedName.toString()),
@@ -144,7 +144,7 @@ class StorageServiceTest {
         writeFile(storedName, content);
 
         repository.save(new StorageItem(
-                1L,
+                null,
                 100L,
                 "sample.txt",
                 storedName,
@@ -174,7 +174,7 @@ class StorageServiceTest {
         Path expectedPath = writeFile(storedName, content);
 
         repository.save(new StorageItem(
-                1L,
+                null,
                 10L,
                 "report.pdf",
                 storedName,
@@ -209,7 +209,7 @@ class StorageServiceTest {
         Path filePath = writeFile(storedName, content);
 
         repository.save(new StorageItem(
-                1L,
+                null,
                 30L,
                 "delete.txt",
                 storedName,
@@ -238,7 +238,7 @@ class StorageServiceTest {
         Path filePath = writeFile(storedName, content);
 
         StorageItem savedItem = repository.save(new StorageItem(
-                1L,
+                null,
                 40L,
                 "mark.txt",
                 storedName,
@@ -272,7 +272,7 @@ class StorageServiceTest {
         writeFile(storedName, content);
 
         StorageItem storageItem = new StorageItem(
-                1L,
+                null,
                 50L,
                 "deleted.txt",
                 storedName,
