@@ -3,6 +3,7 @@ package c4.mystorage.presentation;
 import c4.mystorage.application.StorageFileData;
 import c4.mystorage.application.StorageItemCreate;
 import c4.mystorage.application.StorageService;
+import c4.mystorage.domain.StorageItem;
 import org.apache.tika.Tika;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -25,6 +26,16 @@ public class StorageController {
     public StorageController(Tika tika, StorageService storageService) {
         this.tika = tika;
         this.storageService = storageService;
+    }
+
+    @PostMapping("/folders")
+    public ResponseEntity<FolderResponse> createFolder(
+            @RequestHeader("X-OWNER-ID") Long ownerId,
+            @RequestBody FolderCreateRequest request
+    ) {
+        StorageItem folder = storageService.createFolder(
+                ownerId, request.name(), request.parentId());
+        return ResponseEntity.ok(FolderResponse.from(folder));
     }
 
     @PostMapping(path = "/storage-items", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
