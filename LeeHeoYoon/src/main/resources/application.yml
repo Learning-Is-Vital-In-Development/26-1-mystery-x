@@ -12,7 +12,7 @@ spring:
       max-request-size: 100MB
       file-size-threshold: 10KB
       resolve-lazily: true
-      location: /data/storage/.tmp
+      location: ${storage.base-path}/.tmp
 
   thymeleaf:
     cache: false
@@ -46,7 +46,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
 storage:
-  base-path: /data/storage
+  base-path: ${STORAGE_BASE_PATH:./storage-data}
 
 server:
   port: 8080

@@ -13,3 +13,6 @@ build/
 # Environment
 .env
 docker/.env
+
+# Local storage
+storage-data/
