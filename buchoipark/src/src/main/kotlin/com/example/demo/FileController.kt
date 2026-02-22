@@ -20,6 +20,11 @@ import java.nio.file.Files
 class FileController(
     private val fileService: FileService,
 ) {
+    @GetMapping("/health")
+    fun health(): ResponseEntity<Map<String, String>> {
+        return ResponseEntity.ok(mapOf("status" to "UP"))
+    }
+
     @PostMapping("/files/move-folder")
     fun moveFolder(@RequestBody request: MoveFolderRequest): ResponseEntity<Map<String, Any>> {
         val fromPath = request.fromPath.trimEnd('/')
