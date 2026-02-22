@@ -38,7 +38,11 @@ public interface FileMetadataRepository extends JpaRepository<FileMetadata, Long
     @Modifying(clearAutomatically = true)
     @Query(value = """
         UPDATE file_metadata
-        SET folder_path = CAST(:newPrefix || subpath(folder_path, nlevel(CAST(:oldPrefix AS ltree))) AS ltree)
+        SET folder_path = CASE
+            WHEN folder_path = CAST(:oldPrefix AS ltree)
+            THEN CAST(:newPrefix AS ltree)
+            ELSE CAST(:newPrefix || '.' || subpath(folder_path, nlevel(CAST(:oldPrefix AS ltree))) AS ltree)
+        END
         WHERE folder_path <@ CAST(:oldPrefix AS ltree)
         """, nativeQuery = true)
     int moveFilesUnderPath(@Param("oldPrefix") String oldPrefix,

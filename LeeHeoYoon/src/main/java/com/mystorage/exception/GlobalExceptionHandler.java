@@ -9,6 +9,8 @@ import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.stream.Collectors;
 
@@ -68,6 +70,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException e) {
         return ResponseEntity.status(409).body(new ErrorResponse(409, "CONFLICT", "Duplicate or constraint violation"));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(MissingServletRequestPartException e) {
+        return ResponseEntity.status(400).body(new ErrorResponse(400, "BAD_REQUEST", e.getMessage()));
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ErrorResponse> handleMultipart(MultipartException e) {
+        return ResponseEntity.status(400).body(new ErrorResponse(400, "BAD_REQUEST", e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

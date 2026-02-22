@@ -45,3 +45,6 @@ CREATE INDEX idx_files_folder_path_gist ON file_metadata USING GIST (folder_path
 CREATE INDEX idx_files_deleted ON file_metadata (deleted, deleted_at) WHERE deleted = TRUE;
 CREATE INDEX idx_files_upload_status ON file_metadata (upload_status, created_at)
     WHERE upload_status IN ('PENDING', 'FAILED');
+
+-- Allow implicit cast from text/varchar to ltree for Hibernate compatibility
+CREATE CAST (text AS ltree) WITH INOUT AS IMPLICIT;

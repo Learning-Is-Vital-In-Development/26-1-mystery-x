@@ -35,7 +35,11 @@ public interface FolderRepository extends JpaRepository<Folder, Long> {
     @Modifying(clearAutomatically = true)
     @Query(value = """
         UPDATE folders
-        SET path = CAST(:newPrefix || subpath(path, nlevel(CAST(:oldPrefix AS ltree))) AS ltree)
+        SET path = CASE
+            WHEN path = CAST(:oldPrefix AS ltree)
+            THEN CAST(:newPrefix AS ltree)
+            ELSE CAST(:newPrefix || '.' || subpath(path, nlevel(CAST(:oldPrefix AS ltree))) AS ltree)
+        END
         WHERE path <@ CAST(:oldPrefix AS ltree)
         """, nativeQuery = true)
     int moveDescendantPaths(@Param("oldPrefix") String oldPrefix,

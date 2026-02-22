@@ -84,7 +84,8 @@ public class FolderService {
     public FolderContentsResponse listContents(Long userId, Long folderId, int page, int size) {
         // ★ 페이지네이션: 기본 200, 최대 1000 ★
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(Math.max(page, 0), safeSize, Sort.by("name").ascending());
+        Pageable folderPageable = PageRequest.of(Math.max(page, 0), safeSize, Sort.by("name").ascending());
+        Pageable filePageable = PageRequest.of(Math.max(page, 0), safeSize, Sort.by("originalName").ascending());
 
         String folderName;
         if (folderId != null) {
@@ -94,9 +95,9 @@ public class FolderService {
             folderName = "root";
         }
 
-        List<Folder> folders = folderRepo.findByUserIdAndParentIdAndDeletedFalse(userId, folderId, pageable);
+        List<Folder> folders = folderRepo.findByUserIdAndParentIdAndDeletedFalse(userId, folderId, folderPageable);
         List<FileMetadata> files = fileRepo.findByUserIdAndFolderIdAndDeletedFalseAndUploadStatus(
-            userId, folderId, UploadStatus.COMPLETED, pageable);
+            userId, folderId, UploadStatus.COMPLETED, filePageable);
 
         return new FolderContentsResponse(
             folderId, folderName,

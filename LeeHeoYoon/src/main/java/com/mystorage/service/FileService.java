@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -36,6 +37,7 @@ public class FileService {
     private final FileMetadataRepository fileRepo;
     private final FolderRepository folderRepo;
     private final PhysicalStorageManager storageManager;
+    private final TransactionTemplate txTemplate;
 
     @Transactional
     public FileResponse upload(Long userId, MultipartFile file, Long folderId) {
@@ -167,6 +169,13 @@ public class FileService {
             throw new StorageFileNotFoundException("Cannot copy incomplete file");
         }
 
+        // Check for duplicate filename in target folder
+        if (fileRepo.existsByUserIdAndFolderIdAndOriginalNameAndDeletedFalse(
+                userId, targetFolderId, source.getOriginalName())) {
+            throw new DuplicateNameException(
+                "File '" + source.getOriginalName() + "' already exists in target folder");
+        }
+
         String targetFolderPath = null;
         if (targetFolderId != null) {
             Folder targetFolder = getOwnedFolder(userId, targetFolderId);
@@ -263,7 +272,9 @@ public class FileService {
      */
     private void updateStatusSafely(Long metadataId, UploadStatus status) {
         try {
-            fileRepo.updateUploadStatus(metadataId, status);
+            txTemplate.executeWithoutResult(tx ->
+                fileRepo.updateUploadStatus(metadataId, status)
+            );
         } catch (Exception ex) {
             log.warn("Failed to update upload status to {} for metadata {}: {}",
                 status, metadataId, ex.getMessage());
