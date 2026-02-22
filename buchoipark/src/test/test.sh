@@ -1,13 +1,13 @@
 # 0) DB 초기화 (개발용)
-sqlite3 /data/26-1-mystery-x/buchoipark/data/sqlite/livid.db "DELETE FROM files;"
-rm -rf /data/26-1-mystery-x/buchoipark/data/uploads/*
+sqlite3 /app/data/sqlite/livid.db "DELETE FROM files;"
+rm -rf /app/data/uploads/*
 rm -rf ./test.txt
 
 # 1) 업로드
 UPLOAD_RES=$(curl -s -X POST "http://localhost:8080/files/upload" \
   -F "userId=user-123" \
   -F "filePath=/docs/test.txt" \
-  -F "file=@/data/26-1-mystery-x/buchoipark/src/test/upload-original/test.txt")
+  -F "file=@/app/src/test/upload-original/test.txt")
 
 echo "$UPLOAD_RES"
 

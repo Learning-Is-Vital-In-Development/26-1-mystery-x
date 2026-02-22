@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  server-debug:
+    build:
+      context: ../src
+      dockerfile: ../deploy/server/Dockerfile
+      target: builder
+    container_name: buchoipark-server-debug
+    environment:
+      - SPRING_PROFILES_ACTIVE=debug
+      - SQLITE_DB_PATH=/app/data/sqlite/livid.db
+      - APP_STORAGE_DIR=/app/data/uploads
+    volumes:
+      - ../data/sqlite:/app/data/sqlite
+      - ../data/uploads:/app/data/uploads
+      - ../src:/app/src
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
