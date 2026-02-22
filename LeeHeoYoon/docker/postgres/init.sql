@@ -48,3 +48,4 @@ CREATE INDEX idx_files_upload_status ON file_metadata (upload_status, created_at
 
 -- Allow implicit cast from text/varchar to ltree for Hibernate compatibility
 CREATE CAST (text AS ltree) WITH INOUT AS IMPLICIT;
+CREATE CAST (varchar AS ltree) WITH INOUT AS IMPLICIT;
