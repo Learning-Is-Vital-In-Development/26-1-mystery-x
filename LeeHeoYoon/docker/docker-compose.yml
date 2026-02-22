@@ -26,7 +26,7 @@ services:
     image: nginx:alpine
     container_name: my-storage-nginx
     ports:
-      - "80:80"
+      - "${NGINX_PORT:-8888}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - storage-data:/data/storage:ro
@@ -47,8 +47,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       STORAGE_BASE_PATH: /data/storage
       JAVA_OPTS: "-XX:+UseZGC -XX:+ZGenerational -Xms1g -Xmx1g -XX:+AlwaysPreTouch -XX:+DisableExplicitGC -Djdk.tracePinnedThreads=short"
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     volumes:
       - storage-data:/data/storage
     depends_on:
