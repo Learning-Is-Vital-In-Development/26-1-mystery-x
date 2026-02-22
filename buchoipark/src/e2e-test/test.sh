@@ -1,3 +1,14 @@
+#!/bin/bash
+
+echo 해당 스크립트는 파일 업로드, 다운로드, 이동 기능을 테스트하기 위한 E2E 테스트입니다.
+echo 항상 db 및 업로드된 파일을 초기화됩니다.
+echo "정말 진행하시겠습니까? (y/n)"
+read -r answer
+if [[ "$answer" != "y" ]]; then
+  echo "테스트가 취소되었습니다."
+  exit 0
+fi
+
 # 0) DB 초기화 (개발용)
 sqlite3 /app/data/sqlite/livid.db "DELETE FROM files;"
 rm -rf /app/data/uploads/*
@@ -7,7 +18,7 @@ rm -rf ./test.txt
 UPLOAD_RES=$(curl -s -X POST "http://localhost:8080/files/upload" \
   -F "userId=user-123" \
   -F "filePath=/docs/test.txt" \
-  -F "file=@/app/src/test/upload-original/test.txt")
+  -F "file=@/app/src/e2e-test/upload-original/test.txt")
 
 echo "$UPLOAD_RES"
 
@@ -39,7 +50,18 @@ curl -s "http://localhost:8080/files" | jq
 echo "폴더 이동:"
 curl -s -X POST "http://localhost:8080/files/move-folder" \
   -H "Content-Type: application/json" \
-  -d '{"fromPath":"/docs","toPath":"/docs2"}'
+  -d '{"fromPath":"/virtual/moved","toPath":"/docs2"}'
 
 echo "업데이트 후 전체 파일 목록:"
 curl -s "http://localhost:8080/files" | jq
+
+# 다운로드된 파일과 원본 데이터가 일치하는지 확인
+echo "다운로드된 파일과 원본 데이터가 일치하는지 확인:"
+if cmp -s "./test.txt" "/app/src/e2e-test/upload-original/test.txt"; then
+  echo "파일이 일치합니다."
+else
+  echo "파일이 일치하지 않습니다."
+fi
+
+echo "테스트가 완료되었습니다. 다운로드 된 파일을 삭제합니다."
+rm -rf ./test.txt
