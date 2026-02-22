@@ -8,8 +8,8 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
+      max-file-size: 300MB    # nginx client_max_body_size와 일치
+      max-request-size: 300MB  # nginx client_max_body_size와 일치
       file-size-threshold: 10KB
       resolve-lazily: true
       location: ${storage.base-path}/.tmp
