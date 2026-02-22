@@ -1,10 +1,8 @@
-version: "3.8"
-
 services:
   server-debug:
     build:
       context: ../src
-      dockerfile: ../deploy/server/Dockerfile
+      dockerfile: ../deploy/Dockerfile
       target: builder
     container_name: buchoipark-server-debug
     environment:
