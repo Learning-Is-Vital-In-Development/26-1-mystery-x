@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Storage - Test UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .clickable { cursor: pointer; }
+        .clickable:hover { background-color: #f8f9fa; }
+        .breadcrumb-item a { text-decoration: none; }
+        #alertArea { position: fixed; top: 10px; right: 10px; z-index: 1050; min-width: 300px; }
+    </style>
+</head>
+<body>
+<div class="container-fluid mt-3">
+    <!-- Alert Area -->
+    <div id="alertArea"></div>
+
+    <!-- Header -->
+    <div class="row mb-3">
+        <div class="col">
+            <h4 class="d-inline">My Storage Test UI</h4>
+        </div>
+        <div class="col-auto">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text">User ID</span>
+                <input type="number" id="userIdInput" class="form-control" value="1" style="width: 80px;">
+                <button class="btn btn-outline-secondary" onclick="changeUserId()">변경</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb" id="breadcrumb"></ol>
+    </nav>
+
+    <!-- Toolbar -->
+    <div class="btn-group mb-3">
+        <button class="btn btn-sm btn-primary" onclick="showCreateFolderModal()">새 폴더</button>
+        <button class="btn btn-sm btn-success" onclick="document.getElementById('fileInput').click()">파일 업로드</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="refresh()">새로고침</button>
+    </div>
+    <input type="file" id="fileInput" class="d-none" onchange="uploadFile()">
+
+    <!-- Contents Table -->
+    <table class="table table-sm table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>이름</th>
+                <th>타입</th>
+                <th>크기</th>
+                <th>상태</th>
+                <th>생성일</th>
+                <th>작업</th>
+            </tr>
+        </thead>
+        <tbody id="contentsBody"></tbody>
+    </table>
+    <div id="emptyMessage" class="text-muted text-center d-none">이 폴더는 비어 있습니다.</div>
+</div>
+
+<!-- Create Folder Modal -->
+<div class="modal fade" id="createFolderModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">새 폴더 만들기</h6></div>
+            <div class="modal-body">
+                <input type="text" id="newFolderName" class="form-control form-control-sm" placeholder="폴더 이름">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button class="btn btn-sm btn-primary" onclick="createFolder()">생성</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Folder Modal -->
+<div class="modal fade" id="renameFolderModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">폴더 이름 변경</h6></div>
+            <div class="modal-body">
+                <input type="hidden" id="renameFolderId">
+                <input type="text" id="renameFolderName" class="form-control form-control-sm" placeholder="새 이름">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button class="btn btn-sm btn-primary" onclick="renameFolder()">변경</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Move Modal (shared for folder and file) -->
+<div class="modal fade" id="moveModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title" id="moveModalTitle">이동</h6></div>
+            <div class="modal-body">
+                <input type="hidden" id="moveItemId">
+                <input type="hidden" id="moveItemType">
+                <label class="form-label small">대상 폴더 ID (비우면 루트)</label>
+                <input type="number" id="moveTargetFolderId" class="form-control form-control-sm" placeholder="폴더 ID">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button class="btn btn-sm btn-primary" onclick="moveItem()">이동</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Copy Modal -->
+<div class="modal fade" id="copyModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">파일 복사</h6></div>
+            <div class="modal-body">
+                <input type="hidden" id="copyFileId">
+                <label class="form-label small">대상 폴더 ID (비우면 루트)</label>
+                <input type="number" id="copyTargetFolderId" class="form-control form-control-sm" placeholder="폴더 ID">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button class="btn btn-sm btn-primary" onclick="copyFile()">복사</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Metadata Modal -->
+<div class="modal fade" id="metadataModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h6 class="modal-title">파일 메타데이터</h6></div>
+            <div class="modal-body">
+                <table class="table table-sm" id="metadataTable"></table>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">닫기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let userId = 1;
+    let folderStack = [{id: null, name: 'root'}];
+
+    function getCurrentFolderId() {
+        return folderStack[folderStack.length - 1].id;
+    }
+
+    function headers() {
+        return { 'X-User-Id': String(userId) };
+    }
+
+    function jsonHeaders() {
+        return { 'X-User-Id': String(userId), 'Content-Type': 'application/json' };
+    }
+
+    function showAlert(msg, type = 'success') {
+        const area = document.getElementById('alertArea');
+        const id = 'alert-' + Date.now();
+        area.innerHTML += `<div id="${id}" class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${msg}<button type="button" class="btn-close btn-close-sm" data-bs-dismiss="alert"></button></div>`;
+        setTimeout(() => { const el = document.getElementById(id); if (el) el.remove(); }, 4000);
+    }
+
+    function formatSize(bytes) {
+        if (!bytes || bytes === 0) return '-';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        let size = bytes;
+        while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+        return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '-';
+        return new Date(dateStr).toLocaleString('ko-KR');
+    }
+
+    // --- Navigation ---
+
+    function renderBreadcrumb() {
+        const ol = document.getElementById('breadcrumb');
+        ol.innerHTML = '';
+        folderStack.forEach((item, idx) => {
+            const li = document.createElement('li');
+            li.className = 'breadcrumb-item' + (idx === folderStack.length - 1 ? ' active' : '');
+            if (idx < folderStack.length - 1) {
+                li.innerHTML = `<a href="#" onclick="navigateTo(${idx}); return false;">${item.name}</a>`;
+            } else {
+                li.textContent = item.name;
+            }
+            ol.appendChild(li);
+        });
+    }
+
+    function navigateTo(index) {
+        folderStack = folderStack.slice(0, index + 1);
+        fetchContents(getCurrentFolderId());
+        renderBreadcrumb();
+    }
+
+    function loadFolder(folderId, folderName) {
+        folderStack.push({id: folderId, name: folderName});
+        fetchContents(folderId);
+        renderBreadcrumb();
+    }
+
+    function goUp() {
+        if (folderStack.length > 1) {
+            folderStack.pop();
+            fetchContents(getCurrentFolderId());
+            renderBreadcrumb();
+        }
+    }
+
+    function refresh() {
+        fetchContents(getCurrentFolderId());
+    }
+
+    async function fetchContents(folderId) {
+        const url = folderId
+            ? `/api/folders/${folderId}/contents`
+            : `/api/folders/root/contents`;
+        try {
+            const res = await fetch(url, { headers: headers() });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || `오류: ${res.status}`, 'danger');
+                return;
+            }
+            const data = await res.json();
+            renderTable(data);
+        } catch (e) {
+            showAlert('서버 연결 실패: ' + e.message, 'danger');
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('contentsBody');
+        const emptyMsg = document.getElementById('emptyMessage');
+        tbody.innerHTML = '';
+
+        // Go up row
+        if (folderStack.length > 1) {
+            tbody.innerHTML += `<tr class="clickable" ondblclick="goUp()">
+                <td colspan="6" class="text-muted">.. (상위 폴더)</td></tr>`;
+        }
+
+        const folders = data.folders || [];
+        const files = data.files || [];
+
+        if (folders.length === 0 && files.length === 0) {
+            emptyMsg.classList.remove('d-none');
+        } else {
+            emptyMsg.classList.add('d-none');
+        }
+
+        folders.forEach(f => {
+            tbody.innerHTML += `<tr>
+                <td class="clickable" ondblclick="loadFolder(${f.id}, '${f.name.replace(/'/g, "\\'")}')">
+                    <strong>${f.name}</strong></td>
+                <td><span class="badge bg-secondary">폴더</span></td>
+                <td>-</td>
+                <td>-</td>
+                <td>${formatDate(f.createdAt)}</td>
+                <td>
+                    <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="showRenameFolderModal(${f.id}, '${f.name.replace(/'/g, "\\'")}')">이름변경</button>
+                    <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteFolder(${f.id})">삭제</button>
+                    <button class="btn btn-outline-warning btn-sm py-0 px-1" onclick="showMoveModal(${f.id}, 'folder')">이동</button>
+                </td>
+            </tr>`;
+        });
+
+        files.forEach(f => {
+            tbody.innerHTML += `<tr>
+                <td>${f.originalName}</td>
+                <td><span class="badge bg-info text-dark">파일</span></td>
+                <td>${formatSize(f.fileSize)}</td>
+                <td><span class="badge ${f.uploadStatus === 'COMPLETED' ? 'bg-success' : 'bg-warning'}">${f.uploadStatus}</span></td>
+                <td>${formatDate(f.createdAt)}</td>
+                <td>
+                    <button class="btn btn-outline-success btn-sm py-0 px-1" onclick="downloadFile(${f.id})" ${f.uploadStatus !== 'COMPLETED' ? 'disabled' : ''}>다운로드</button>
+                    <button class="btn btn-outline-danger btn-sm py-0 px-1" onclick="deleteFile(${f.id})">삭제</button>
+                    <button class="btn btn-outline-warning btn-sm py-0 px-1" onclick="showMoveModal(${f.id}, 'file')">이동</button>
+                    <button class="btn btn-outline-primary btn-sm py-0 px-1" onclick="showCopyModal(${f.id})">복사</button>
+                    <button class="btn btn-outline-info btn-sm py-0 px-1" onclick="showMetadata(${f.id})">정보</button>
+                </td>
+            </tr>`;
+        });
+    }
+
+    // --- User ID ---
+
+    function changeUserId() {
+        const val = document.getElementById('userIdInput').value;
+        if (val && !isNaN(val)) {
+            userId = parseInt(val);
+            folderStack = [{id: null, name: 'root'}];
+            renderBreadcrumb();
+            refresh();
+            showAlert('User ID 변경: ' + userId, 'info');
+        }
+    }
+
+    // --- Folder Operations ---
+
+    function showCreateFolderModal() {
+        document.getElementById('newFolderName').value = '';
+        new bootstrap.Modal(document.getElementById('createFolderModal')).show();
+    }
+
+    async function createFolder() {
+        const name = document.getElementById('newFolderName').value.trim();
+        if (!name) { showAlert('폴더 이름을 입력하세요', 'warning'); return; }
+        try {
+            const res = await fetch('/api/folders', {
+                method: 'POST', headers: jsonHeaders(),
+                body: JSON.stringify({ name: name, parentId: getCurrentFolderId() })
+            });
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('createFolderModal')).hide();
+                showAlert('폴더 생성 완료: ' + name);
+                refresh();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || '폴더 생성 실패', 'danger');
+            }
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+    }
+
+    function showRenameFolderModal(id, currentName) {
+        document.getElementById('renameFolderId').value = id;
+        document.getElementById('renameFolderName').value = currentName;
+        new bootstrap.Modal(document.getElementById('renameFolderModal')).show();
+    }
+
+    async function renameFolder() {
+        const id = document.getElementById('renameFolderId').value;
+        const name = document.getElementById('renameFolderName').value.trim();
+        if (!name) { showAlert('이름을 입력하세요', 'warning'); return; }
+        try {
+            const res = await fetch(`/api/folders/${id}`, {
+                method: 'PATCH', headers: jsonHeaders(),
+                body: JSON.stringify({ name: name })
+            });
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('renameFolderModal')).hide();
+                showAlert('이름 변경 완료');
+                refresh();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || '이름 변경 실패', 'danger');
+            }
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+    }
+
+    async function deleteFolder(id) {
+        if (!confirm('이 폴더를 삭제하시겠습니까?')) return;
+        try {
+            const res = await fetch(`/api/folders/${id}`, {
+                method: 'DELETE', headers: headers()
+            });
+            if (res.ok) { showAlert('폴더 삭제 완료'); refresh(); }
+            else {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || '삭제 실패', 'danger');
+            }
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+    }
+
+    // --- Move (shared) ---
+
+    function showMoveModal(id, type) {
+        document.getElementById('moveItemId').value = id;
+        document.getElementById('moveItemType').value = type;
+        document.getElementById('moveTargetFolderId').value = '';
+        document.getElementById('moveModalTitle').textContent = (type === 'folder' ? '폴더' : '파일') + ' 이동';
+        new bootstrap.Modal(document.getElementById('moveModal')).show();
+    }
+
+    async function moveItem() {
+        const id = document.getElementById('moveItemId').value;
+        const type = document.getElementById('moveItemType').value;
+        const targetVal = document.getElementById('moveTargetFolderId').value.trim();
+        const targetFolderId = targetVal ? parseInt(targetVal) : null;
+
+        const url = type === 'folder'
+            ? `/api/folders/${id}/move`
+            : `/api/files/${id}/move`;
+        try {
+            const res = await fetch(url, {
+                method: 'PATCH', headers: jsonHeaders(),
+                body: JSON.stringify({ targetFolderId: targetFolderId })
+            });
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('moveModal')).hide();
+                showAlert('이동 완료');
+                refresh();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || '이동 실패', 'danger');
+            }
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+    }
+
+    // --- File Operations ---
+
+    async function uploadFile() {
+        const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files[0]) return;
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        const folderId = getCurrentFolderId();
+        if (folderId) formData.append('folderId', folderId);
+        try {
+            const res = await fetch('/api/files', {
+                method: 'POST',
+                headers: { 'X-User-Id': String(userId) },
+                body: formData
+            });
+            if (res.ok) {
+                showAlert('파일 업로드 요청 완료. 처리 중입니다...', 'info');
+                setTimeout(() => refresh(), 2000);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || '업로드 실패', 'danger');
+            }
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+        fileInput.value = '';
+    }
+
+    function downloadFile(id) {
+        window.location.href = `/ui/download/${id}?userId=${userId}`;
+    }
+
+    async function deleteFile(id) {
+        if (!confirm('이 파일을 삭제하시겠습니까?')) return;
+        try {
+            const res = await fetch(`/api/files/${id}`, {
+                method: 'DELETE', headers: headers()
+            });
+            if (res.ok) { showAlert('파일 삭제 완료'); refresh(); }
+            else {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || '삭제 실패', 'danger');
+            }
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+    }
+
+    function showCopyModal(id) {
+        document.getElementById('copyFileId').value = id;
+        document.getElementById('copyTargetFolderId').value = '';
+        new bootstrap.Modal(document.getElementById('copyModal')).show();
+    }
+
+    async function copyFile() {
+        const id = document.getElementById('copyFileId').value;
+        const targetVal = document.getElementById('copyTargetFolderId').value.trim();
+        const targetFolderId = targetVal ? parseInt(targetVal) : null;
+        try {
+            const res = await fetch(`/api/files/${id}/copy`, {
+                method: 'POST', headers: jsonHeaders(),
+                body: JSON.stringify({ targetFolderId: targetFolderId })
+            });
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('copyModal')).hide();
+                showAlert('파일 복사 요청 완료. 처리 중입니다...', 'info');
+                setTimeout(() => refresh(), 2000);
+            } else {
+                const err = await res.json().catch(() => ({}));
+                showAlert(err.message || '복사 실패', 'danger');
+            }
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+    }
+
+    async function showMetadata(id) {
+        try {
+            const res = await fetch(`/api/files/${id}/metadata`, { headers: headers() });
+            if (!res.ok) { showAlert('메타데이터 조회 실패', 'danger'); return; }
+            const data = await res.json();
+            const table = document.getElementById('metadataTable');
+            table.innerHTML = `
+                <tr><th>ID</th><td>${data.id}</td></tr>
+                <tr><th>파일명</th><td>${data.originalName}</td></tr>
+                <tr><th>크기</th><td>${formatSize(data.fileSize)}</td></tr>
+                <tr><th>Content-Type</th><td>${data.contentType || '-'}</td></tr>
+                <tr><th>폴더 ID</th><td>${data.folderId || 'root'}</td></tr>
+                <tr><th>상태</th><td>${data.uploadStatus}</td></tr>
+                <tr><th>생성일</th><td>${formatDate(data.createdAt)}</td></tr>`;
+            new bootstrap.Modal(document.getElementById('metadataModal')).show();
+        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+    }
+
+    // --- Init ---
+    document.addEventListener('DOMContentLoaded', () => {
+        renderBreadcrumb();
+        refresh();
+    });
+</script>
+</body>
+</html>
