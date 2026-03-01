@@ -1,0 +1,168 @@
+### ============================================
+### Step 3 시나리오 테스트 (위에서 아래로 순서대로 실행)
+### ============================================
+
+### 1. "documents" 폴더 생성 (루트)
+POST http://localhost:8080/folders
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"name": "documents", "parentId": null}
+
+> {%
+    client.global.set("documentsId", response.body.id);
+%}
+
+### 2. "photos" 폴더 생성 (documents 하위)
+POST http://localhost:8080/folders
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"name": "photos", "parentId": {{documentsId}}}
+
+> {%
+    client.global.set("photosId", response.body.id);
+%}
+
+### 3. "notes" 폴더 생성 (documents 하위)
+POST http://localhost:8080/folders
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"name": "notes", "parentId": {{documentsId}}}
+
+> {%
+    client.global.set("notesId", response.body.id);
+%}
+
+### 4. "archive" 폴더 생성 (루트)
+POST http://localhost:8080/folders
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"name": "archive", "parentId": null}
+
+> {%
+    client.global.set("archiveId", response.body.id);
+%}
+
+### 5. 확인: 루트 항목 조회 → documents, archive
+GET http://localhost:8080/folders/root/items
+X-OWNER-ID: 1
+
+### 6. 확인: documents 하위 조회 → photos, notes
+GET http://localhost:8080/folders/{{documentsId}}/items
+X-OWNER-ID: 1
+
+### ============================================
+### 이동 시나리오
+### ============================================
+
+### 7. 이동: photos → archive 하위로
+PATCH http://localhost:8080/storage-items/{{photosId}}/move
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": {{archiveId}}}
+
+### 8. 확인: archive 하위 조회 → photos 있어야 함
+GET http://localhost:8080/folders/{{archiveId}}/items
+X-OWNER-ID: 1
+
+### 9. 확인: documents 하위 조회 → notes만 남아야 함
+GET http://localhost:8080/folders/{{documentsId}}/items
+X-OWNER-ID: 1
+
+### 10. 이동: photos → 루트로
+PATCH http://localhost:8080/storage-items/{{photosId}}/move
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": null}
+
+### 11. 확인: 루트 조회 → documents, archive, photos
+GET http://localhost:8080/folders/root/items
+X-OWNER-ID: 1
+
+### 12. 이동 에러: 같은 위치로 이동 (변경 없이 200)
+PATCH http://localhost:8080/storage-items/{{photosId}}/move
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": null}
+
+### 13. 이동: photos → documents 하위로 복귀
+PATCH http://localhost:8080/storage-items/{{photosId}}/move
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": {{documentsId}}}
+
+### 14. 이동 에러: 순환 참조 (documents를 photos 하위로)
+PATCH http://localhost:8080/storage-items/{{documentsId}}/move
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": {{photosId}}}
+
+### 15. 이동 에러: 이름 중복 (notes를 archive에 넣고, 같은 이름으로 또 이동)
+# notes를 archive로 이동
+PATCH http://localhost:8080/storage-items/{{notesId}}/move
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": {{archiveId}}}
+
+### ============================================
+### 복사 시나리오
+### ============================================
+
+### 16. 복사: photos → archive 하위로
+POST http://localhost:8080/storage-items/{{photosId}}/copy
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": {{archiveId}}}
+
+> {%
+    client.global.set("photosCopyId", response.body.id);
+%}
+
+### 17. 확인: archive 하위 조회 → notes, photos(복사본)
+GET http://localhost:8080/folders/{{archiveId}}/items
+X-OWNER-ID: 1
+
+### 18. 확인: documents 하위 조회 → photos(원본) 그대로 존재
+GET http://localhost:8080/folders/{{documentsId}}/items
+X-OWNER-ID: 1
+
+### 19. 복사 에러: 이름 중복 (archive에 photos가 이미 있음)
+POST http://localhost:8080/storage-items/{{photosId}}/copy
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"targetParentId": {{archiveId}}}
+
+### ============================================
+### 삭제 시나리오
+### ============================================
+
+### 20. 삭제: documents 폴더 (하위 photos 포함 soft delete)
+DELETE http://localhost:8080/folders/{{documentsId}}
+X-OWNER-ID: 1
+
+### 21. 확인: 루트 조회 → archive만 남아야 함
+GET http://localhost:8080/folders/root/items
+X-OWNER-ID: 1
+
+### 22. 확인: archive 하위 → notes, photos(복사본) 영향 없음
+GET http://localhost:8080/folders/{{archiveId}}/items
+X-OWNER-ID: 1
+
+### 23. 삭제 에러: 이미 삭제된 폴더
+DELETE http://localhost:8080/folders/{{documentsId}}
+X-OWNER-ID: 1
+
+### 24. 삭제 에러: 권한 없는 사용자
+DELETE http://localhost:8080/folders/{{archiveId}}
+X-OWNER-ID: 999
