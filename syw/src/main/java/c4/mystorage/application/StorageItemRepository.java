@@ -38,4 +38,23 @@ public interface StorageItemRepository extends CrudRepository<StorageItem, Long>
            "WHERE owner_id = :ownerId AND parent_id IS NULL AND deleted_at IS NULL")
     List<StorageItem> findByOwnerIdAndParentIdIsNullAndDeletedAtIsNull(
             @Param("ownerId") Long ownerId);
+
+    @Query("SELECT * FROM storage_item WHERE parent_id = :parentId AND deleted_at IS NULL")
+    List<StorageItem> findByParentIdAndDeletedAtIsNull(@Param("parentId") Long parentId);
+
+    @Query("SELECT * FROM storage_item WHERE id = :id AND deleted_at IS NULL")
+    Optional<StorageItem> findByIdAndDeletedAtIsNull(@Param("id") Long id);
+
+    @Query("SELECT parent_id FROM storage_item WHERE id = :id AND deleted_at IS NULL")
+    Optional<Long> findParentIdById(@Param("id") Long id);
+
+    @Query("SELECT COUNT(*) > 0 FROM storage_item " +
+           "WHERE owner_id = :ownerId " +
+           "AND ((:parentId IS NULL AND parent_id IS NULL) OR parent_id = :parentId) " +
+           "AND display_name = :displayName " +
+           "AND deleted_at IS NULL")
+    boolean existsByOwnerAndParentAndName(
+            @Param("ownerId") Long ownerId,
+            @Param("parentId") Long parentId,
+            @Param("displayName") String displayName);
 }

@@ -7,7 +7,7 @@ import c4.mystorage.domain.StorageItem;
 import org.springframework.stereotype.Service;
 
 import java.nio.file.Path;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class StorageService {
@@ -122,10 +122,174 @@ public class StorageService {
         StorageItem storageItem = getByStoredName(storedName);
         checkOwnership(ownerId, storageItem);
 
-        fileManager.delete(storedName);
-
         storageItem.delete();
         repository.save(storageItem);
+
+        try {
+            fileManager.delete(storedName);
+        } catch (Exception e) {
+            storageItem.restore();
+            repository.save(storageItem);
+            throw e;
+        }
+    }
+
+    public void deleteFolder(Long ownerId, Long folderId) {
+        StorageItem folder = findDirectoryById(folderId);
+        checkOwnership(ownerId, folder);
+
+        List<StorageItem> allItems = collectSubtreeItems(folder);
+        allItems.forEach(StorageItem::delete);
+        repository.saveAll(allItems);
+    }
+
+    /**
+     * BFS로 루트 폴더 하위의 모든 항목(파일+디렉토리)을 수집한다.
+     * queue에는 디렉토리만 넣어 자식 탐색 대상으로 사용하고,
+     * allItems에는 파일과 디렉토리 모두 담아 삭제 대상으로 반환한다.
+     * @param root
+     * @return
+     */
+    private List<StorageItem> collectSubtreeItems(StorageItem root) {
+        List<StorageItem> allItems = new ArrayList<>();
+        Queue<StorageItem> queue = new LinkedList<>();
+        queue.add(root);
+        allItems.add(root);
+
+        while (!queue.isEmpty()) {
+            StorageItem current = queue.poll();
+            List<StorageItem> children = repository.findByParentIdAndDeletedAtIsNull(current.getId());
+            for (StorageItem child : children) {
+                allItems.add(child);
+                if (child.isDirectory()) {
+                    queue.add(child);
+                }
+            }
+        }
+        return allItems;
+    }
+
+    public void moveItem(Long ownerId, Long itemId, Long targetParentId) {
+        StorageItem item = findByIdAndDeletedAtIsNull(itemId);
+        checkOwnership(ownerId, item);
+
+        if (item.isSameParent(targetParentId)) {
+            return;
+        }
+
+        if (targetParentId != null) {
+            validateParentFolder(ownerId, targetParentId);
+        }
+
+        if (item.isDirectory()) {
+            validateNotCircular(itemId, targetParentId);
+        }
+
+        validateNoDuplicate(ownerId, targetParentId, item.getDisplayName());
+
+        item.moveTo(targetParentId);
+        repository.save(item);
+    }
+
+    private void validateNotCircular(Long sourceId, Long targetParentId) {
+        Long currentId = targetParentId;
+        while (currentId != null) {
+            if (currentId.equals(sourceId)) {
+                throw new StorageException("순환 참조가 발생합니다.");
+            }
+            currentId = repository.findParentIdById(currentId).orElse(null);
+        }
+    }
+
+    private void validateNoDuplicate(Long ownerId, Long targetParentId, String displayName) {
+        if (repository.existsByOwnerAndParentAndName(ownerId, targetParentId, displayName)) {
+            throw new StorageException("동일한 이름이 이미 존재합니다: " + displayName);
+        }
+    }
+
+    public StorageItem copyItem(Long ownerId, Long itemId, Long targetParentId) {
+        StorageItem item = findByIdAndDeletedAtIsNull(itemId);
+        checkOwnership(ownerId, item);
+
+        if (targetParentId != null) {
+            validateParentFolder(ownerId, targetParentId);
+        }
+
+        validateNoDuplicate(ownerId, targetParentId, item.getDisplayName());
+
+        List<String> copiedFiles = new ArrayList<>();
+        try {
+            if (item.isFile()) {
+                return copyFile(item, targetParentId, copiedFiles);
+            }
+            return copyFolder(item, targetParentId, copiedFiles);
+        } catch (Exception e) {
+            cleanupCopiedFiles(copiedFiles, e);
+            throw e;
+        }
+    }
+
+    private StorageItem copyFile(StorageItem source, Long targetParentId, List<String> copiedFiles) {
+        String newStoredName = uuidGenerator.generate().toString();
+        fileManager.copy(source.getStoredName(), newStoredName);
+        copiedFiles.add(newStoredName);
+
+        StorageItem copy = new StorageItem(
+                targetParentId,
+                source.getOwnerId(),
+                source.getDisplayName(),
+                newStoredName,
+                source.getSize(),
+                ItemType.FILE,
+                source.getContentType(),
+                source.getExtraMetadata()
+        );
+        return repository.save(copy);
+    }
+
+    private StorageItem copyFolder(StorageItem sourceFolder, Long targetParentId, List<String> copiedFiles) {
+        StorageItem newFolder = new StorageItem(
+                targetParentId,
+                sourceFolder.getOwnerId(),
+                sourceFolder.getDisplayName(),
+                null,
+                0L,
+                ItemType.DIRECTORY,
+                null,
+                null
+        );
+        newFolder = repository.save(newFolder);
+
+        List<StorageItem> children = repository.findByParentIdAndDeletedAtIsNull(sourceFolder.getId());
+        for (StorageItem child : children) {
+            if (child.isFile()) {
+                copyFile(child, newFolder.getId(), copiedFiles);
+            } else {
+                copyFolder(child, newFolder.getId(), copiedFiles);
+            }
+        }
+
+        return newFolder;
+    }
+
+    private void cleanupCopiedFiles(List<String> copiedFiles, Exception original) {
+        for (String storedName : copiedFiles) {
+            try {
+                fileManager.delete(storedName);
+            } catch (Exception suppressed) {
+                original.addSuppressed(suppressed);
+            }
+        }
+    }
+
+    private StorageItem findDirectoryById(Long folderId) {
+        return repository.findByIdAndItemTypeAndDeletedAtIsNull(folderId, ItemType.DIRECTORY.name())
+                .orElseThrow(() -> new StorageException("폴더를 찾을 수 없습니다: " + folderId));
+    }
+
+    private StorageItem findByIdAndDeletedAtIsNull(Long itemId) {
+        return repository.findByIdAndDeletedAtIsNull(itemId)
+                .orElseThrow(() -> new StorageException("항목을 찾을 수 없습니다: " + itemId));
     }
 
     private void checkOwnership(Long ownerId, StorageItem storageItem) {

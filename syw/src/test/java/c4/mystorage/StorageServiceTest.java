@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -459,6 +460,342 @@ class StorageServiceTest {
         StorageItem folder = storageService.createFolder(1L, "private", null);
 
         assertThatThrownBy(() -> storageService.listFolder(2L, folder.getId()))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("접근 권한이 없습니다");
+    }
+
+    @DisplayName("빈 폴더를 삭제하면 Soft Delete 된다")
+    @Test
+    void deleteEmptyFolder() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "empty", null);
+
+        storageService.deleteFolder(1L, folder.getId());
+
+        StorageItem deleted = repository.findById(folder.getId()).orElseThrow();
+        assertThat(deleted.getDeletedAt()).isNotNull();
+    }
+
+    @DisplayName("파일이 있는 폴더를 삭제하면 하위 파일도 Soft Delete 된다")
+    @Test
+    void deleteFolderWithFiles() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "with-files", null);
+
+        byte[] content = "test".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folder.getId(), 1L, "file.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        storageService.deleteFolder(1L, folder.getId());
+
+        List<StorageItem> all = (List<StorageItem>) repository.findAll();
+        assertThat(all).allSatisfy(item ->
+                assertThat(item.getDeletedAt()).isNotNull()
+        );
+    }
+
+    @DisplayName("중첩 폴더(A→B→C) 삭제 시 전체가 Soft Delete 된다")
+    @Test
+    void deleteNestedFolders() {
+        StorageService storageService = newStorageService();
+        StorageItem folderA = storageService.createFolder(1L, "A", null);
+        StorageItem folderB = storageService.createFolder(1L, "B", folderA.getId());
+        StorageItem folderC = storageService.createFolder(1L, "C", folderB.getId());
+
+        byte[] content = "test".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folderC.getId(), 1L, "deep-file.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        storageService.deleteFolder(1L, folderA.getId());
+
+        List<StorageItem> all = (List<StorageItem>) repository.findAll();
+        assertAll(
+                () -> assertThat(all).hasSize(4),
+                () -> assertThat(all).allSatisfy(item ->
+                        assertThat(item.getDeletedAt()).isNotNull()
+                )
+        );
+    }
+
+    @DisplayName("이미 삭제된 폴더를 다시 삭제하면 에러가 발생한다")
+    @Test
+    void deleteFolderFailsWhenAlreadyDeleted() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "to-delete", null);
+
+        storageService.deleteFolder(1L, folder.getId());
+
+        assertThatThrownBy(() -> storageService.deleteFolder(1L, folder.getId()))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("폴더를 찾을 수 없습니다");
+    }
+
+    @DisplayName("다른 사용자의 폴더를 삭제하면 에러가 발생한다")
+    @Test
+    void deleteFolderFailsWhenNotOwner() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "private", null);
+
+        assertThatThrownBy(() -> storageService.deleteFolder(2L, folder.getId()))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("접근 권한이 없습니다");
+    }
+
+    @DisplayName("폴더 안에 이미 삭제된 항목이 있어도 나머지만 Soft Delete 된다")
+    @Test
+    void deleteFolderIgnoresAlreadyDeletedChildren() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "parent", null);
+
+        byte[] content = "test".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folder.getId(), 1L, "alive.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+        storageService.save(new StorageItemCreate(
+                folder.getId(), 1L, "dead.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        // dead.txt를 미리 삭제
+        StorageItem deadFile = storageService.listFolder(1L, folder.getId()).stream()
+                .filter(i -> i.getDisplayName().equals("dead.txt"))
+                .findFirst().orElseThrow();
+        storageService.delete(1L, deadFile.getStoredName());
+
+        // 폴더 삭제 — dead.txt는 이미 삭제 상태이므로 BFS에 포함되지 않아야 함
+        storageService.deleteFolder(1L, folder.getId());
+
+        List<StorageItem> all = (List<StorageItem>) repository.findAll();
+        assertThat(all).allSatisfy(item ->
+                assertThat(item.getDeletedAt()).isNotNull()
+        );
+    }
+
+    @DisplayName("중간 폴더만 삭제하면 해당 하위만 Soft Delete 된다")
+    @Test
+    void deleteMiddleFolderOnly() {
+        StorageService storageService = newStorageService();
+        StorageItem folderA = storageService.createFolder(1L, "A", null);
+        StorageItem folderB = storageService.createFolder(1L, "B", folderA.getId());
+        storageService.createFolder(1L, "C", folderB.getId());
+
+        storageService.deleteFolder(1L, folderB.getId());
+
+        assertAll(
+                () -> assertThat(repository.findById(folderA.getId()).orElseThrow().getDeletedAt()).isNull(),
+                () -> assertThat(repository.findById(folderB.getId()).orElseThrow().getDeletedAt()).isNotNull()
+        );
+    }
+
+    // === Step 3: 이동 ===
+
+    @DisplayName("파일을 다른 폴더로 이동하면 parent_id가 변경된다")
+    @Test
+    void moveFileToAnotherFolder() {
+        StorageService storageService = newStorageService();
+        StorageItem folderA = storageService.createFolder(1L, "A", null);
+        StorageItem folderB = storageService.createFolder(1L, "B", null);
+
+        byte[] content = "test".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folderA.getId(), 1L, "file.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        StorageItem file = storageService.listFolder(1L, folderA.getId()).get(0);
+        storageService.moveItem(1L, file.getId(), folderB.getId());
+
+        StorageItem moved = repository.findById(file.getId()).orElseThrow();
+        assertThat(moved.getParentId()).isEqualTo(folderB.getId());
+    }
+
+    @DisplayName("폴더를 이동하면 하위 항목도 자동으로 따라간다")
+    @Test
+    void moveFolderIncludesChildren() {
+        StorageService storageService = newStorageService();
+        StorageItem folderA = storageService.createFolder(1L, "A", null);
+        StorageItem folderB = storageService.createFolder(1L, "B", null);
+        StorageItem child = storageService.createFolder(1L, "child", folderA.getId());
+
+        storageService.moveItem(1L, folderA.getId(), folderB.getId());
+
+        StorageItem movedChild = repository.findById(child.getId()).orElseThrow();
+        assertAll(
+                () -> assertThat(repository.findById(folderA.getId()).orElseThrow().getParentId())
+                        .isEqualTo(folderB.getId()),
+                () -> assertThat(movedChild.getParentId()).isEqualTo(folderA.getId())
+        );
+    }
+
+    @DisplayName("항목을 루트로 이동할 수 있다")
+    @Test
+    void moveItemToRoot() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "parent", null);
+        StorageItem child = storageService.createFolder(1L, "child", folder.getId());
+
+        storageService.moveItem(1L, child.getId(), null);
+
+        StorageItem moved = repository.findById(child.getId()).orElseThrow();
+        assertThat(moved.getParentId()).isNull();
+    }
+
+    @DisplayName("폴더를 자신의 하위 폴더로 이동하면 순환 참조 에러가 발생한다")
+    @Test
+    void moveFolderFailsOnCircularReference() {
+        StorageService storageService = newStorageService();
+        StorageItem folderA = storageService.createFolder(1L, "A", null);
+        StorageItem folderB = storageService.createFolder(1L, "B", folderA.getId());
+        StorageItem folderC = storageService.createFolder(1L, "C", folderB.getId());
+
+        assertThatThrownBy(() -> storageService.moveItem(1L, folderA.getId(), folderC.getId()))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("순환 참조");
+    }
+
+    @DisplayName("이동 대상 위치에 동일한 이름이 있으면 에러가 발생한다")
+    @Test
+    void moveItemFailsOnNameConflict() {
+        StorageService storageService = newStorageService();
+        StorageItem folderA = storageService.createFolder(1L, "A", null);
+        storageService.createFolder(1L, "same-name", null);
+        StorageItem target = storageService.createFolder(1L, "same-name", folderA.getId());
+
+        assertThatThrownBy(() -> storageService.moveItem(1L, target.getId(), null))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("동일한 이름이 이미 존재합니다");
+    }
+
+    @DisplayName("같은 위치로 이동하면 아무 변경 없이 정상 처리된다")
+    @Test
+    void moveItemToSameLocationIsNoOp() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "parent", null);
+        StorageItem child = storageService.createFolder(1L, "child", folder.getId());
+
+        storageService.moveItem(1L, child.getId(), folder.getId());
+
+        StorageItem result = repository.findById(child.getId()).orElseThrow();
+        assertThat(result.getParentId()).isEqualTo(folder.getId());
+    }
+
+    @DisplayName("다른 사용자의 항목을 이동하면 에러가 발생한다")
+    @Test
+    void moveItemFailsWhenNotOwner() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "private", null);
+
+        assertThatThrownBy(() -> storageService.moveItem(2L, folder.getId(), null))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("접근 권한이 없습니다");
+    }
+
+    // === Step 3: 복사 ===
+
+    @DisplayName("파일 복사 시 새 DB 레코드와 물리 파일이 생성된다")
+    @Test
+    void copyFileCreatesNewRecordAndPhysicalFile() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "src", null);
+        StorageItem destFolder = storageService.createFolder(1L, "dest", null);
+
+        byte[] content = "copy-me".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folder.getId(), 1L, "file.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        StorageItem original = storageService.listFolder(1L, folder.getId()).get(0);
+        StorageItem copied = storageService.copyItem(1L, original.getId(), destFolder.getId());
+
+        assertAll(
+                () -> assertThat(copied.getId()).isNotEqualTo(original.getId()),
+                () -> assertThat(copied.getDisplayName()).isEqualTo("file.txt"),
+                () -> assertThat(copied.getParentId()).isEqualTo(destFolder.getId()),
+                () -> assertThat(copied.getStoredName()).isNotEqualTo(original.getStoredName()),
+                () -> assertThat(Files.exists(fileManager.resolvePath(copied.getStoredName()))).isTrue()
+        );
+    }
+
+    @DisplayName("빈 폴더를 복사하면 새 폴더가 생성된다")
+    @Test
+    void copyEmptyFolder() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "empty", null);
+        StorageItem dest = storageService.createFolder(1L, "dest", null);
+
+        StorageItem copied = storageService.copyItem(1L, folder.getId(), dest.getId());
+
+        assertAll(
+                () -> assertThat(copied.getId()).isNotEqualTo(folder.getId()),
+                () -> assertThat(copied.getDisplayName()).isEqualTo("empty"),
+                () -> assertThat(copied.getParentId()).isEqualTo(dest.getId()),
+                () -> assertThat(copied.getItemType()).isEqualTo(ItemType.DIRECTORY)
+        );
+    }
+
+    @DisplayName("중첩 폴더 복사 시 트리 구조가 유지된다")
+    @Test
+    void copyNestedFolderMaintainsTreeStructure() {
+        StorageService storageService = newStorageService();
+        StorageItem folderA = storageService.createFolder(1L, "A", null);
+        StorageItem folderB = storageService.createFolder(1L, "B", folderA.getId());
+
+        byte[] content = "nested".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folderB.getId(), 1L, "deep.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        StorageItem dest = storageService.createFolder(1L, "dest", null);
+        StorageItem copiedA = storageService.copyItem(1L, folderA.getId(), dest.getId());
+
+        // 복사된 A 하위에 B'가 있어야 함
+        List<StorageItem> copiedChildren = storageService.listFolder(1L, copiedA.getId());
+        assertThat(copiedChildren).hasSize(1);
+        assertThat(copiedChildren.get(0).getDisplayName()).isEqualTo("B");
+
+        // B' 하위에 deep.txt가 있어야 함
+        List<StorageItem> deepChildren = storageService.listFolder(1L, copiedChildren.get(0).getId());
+        assertThat(deepChildren).hasSize(1);
+        assertThat(deepChildren.get(0).getDisplayName()).isEqualTo("deep.txt");
+    }
+
+    @DisplayName("복사 대상 위치에 동일한 이름이 있으면 에러가 발생한다")
+    @Test
+    void copyItemFailsOnNameConflict() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "original", null);
+        storageService.createFolder(1L, "original", storageService.createFolder(1L, "dest", null).getId());
+
+        StorageItem dest = storageService.listFolder(1L, null).stream()
+                .filter(i -> i.getDisplayName().equals("dest"))
+                .findFirst().orElseThrow();
+
+        assertThatThrownBy(() -> storageService.copyItem(1L, folder.getId(), dest.getId()))
+                .isInstanceOf(StorageException.class)
+                .hasMessageContaining("동일한 이름이 이미 존재합니다");
+    }
+
+    @DisplayName("다른 사용자의 항목을 복사하면 에러가 발생한다")
+    @Test
+    void copyItemFailsWhenNotOwner() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "private", null);
+
+        assertThatThrownBy(() -> storageService.copyItem(2L, folder.getId(), null))
                 .isInstanceOf(StorageException.class)
                 .hasMessageContaining("접근 권한이 없습니다");
     }

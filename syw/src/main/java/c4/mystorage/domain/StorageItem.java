@@ -6,6 +6,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Getter
 public class StorageItem {
@@ -64,5 +65,25 @@ public class StorageItem {
 
     public void delete() {
         this.deletedAt = LocalDateTime.now();
+    }
+
+    public void restore() {
+        this.deletedAt = null;
+    }
+
+    public boolean isDirectory() {
+        return this.itemType == ItemType.DIRECTORY;
+    }
+
+    public boolean isFile() {
+        return this.itemType == ItemType.FILE;
+    }
+
+    public void moveTo(Long newParentId) {
+        this.parentId = newParentId;
+    }
+
+    public boolean isSameParent(final Long otherParentId) {
+        return Objects.equals(parentId, otherParentId);
     }
 }

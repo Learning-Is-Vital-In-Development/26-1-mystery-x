@@ -41,4 +41,15 @@ public class FileManager {
             throw new StorageException("Disk 삭제 실패", e);
         }
     }
+
+    public void copy(String sourceStoredName, String targetStoredName) {
+        try {
+            Path sourcePath = resolvePath(sourceStoredName);
+            Path targetPath = resolvePath(targetStoredName);
+            Files.createDirectories(targetPath.getParent());
+            Files.copy(sourcePath, targetPath);
+        } catch (IOException e) {
+            throw new StorageException("Disk 복사 실패", e);
+        }
+    }
 }

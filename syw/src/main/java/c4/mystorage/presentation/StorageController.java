@@ -4,6 +4,7 @@ import c4.mystorage.application.StorageFileData;
 import c4.mystorage.application.StorageItemCreate;
 import c4.mystorage.application.StorageService;
 import c4.mystorage.domain.StorageItem;
+import c4.mystorage.presentation.dto.*;
 import org.apache.tika.Tika;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -122,6 +123,35 @@ public class StorageController {
             @PathVariable String storedName
     ) {
         storageService.delete(ownerId, storedName);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/folders/{folderId}")
+    public ResponseEntity<Void> deleteFolder(
+            @RequestHeader("X-OWNER-ID") Long ownerId,
+            @PathVariable Long folderId
+    ) {
+        storageService.deleteFolder(ownerId, folderId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/storage-items/{itemId}/move")
+    public ResponseEntity<Void> moveItem(
+            @RequestHeader("X-OWNER-ID") Long ownerId,
+            @PathVariable Long itemId,
+            @RequestBody MoveRequest request
+    ) {
+        storageService.moveItem(ownerId, itemId, request.targetParentId());
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/storage-items/{itemId}/copy")
+    public ResponseEntity<StorageItemResponse> copyItem(
+            @RequestHeader("X-OWNER-ID") Long ownerId,
+            @PathVariable Long itemId,
+            @RequestBody CopyRequest request
+    ) {
+        var copied = storageService.copyItem(ownerId, itemId, request.targetParentId());
+        return ResponseEntity.ok(StorageItemResponse.from(copied));
     }
 }

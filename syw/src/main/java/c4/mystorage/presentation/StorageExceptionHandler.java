@@ -1,6 +1,7 @@
 package c4.mystorage.presentation;
 
 import c4.mystorage.common.StorageException;
+import c4.mystorage.presentation.dto.ErrorResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
