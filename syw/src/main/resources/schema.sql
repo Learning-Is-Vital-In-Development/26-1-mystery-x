@@ -11,5 +11,6 @@ CREATE TABLE IF NOT EXISTS storage_item
     extra_metadata TEXT,
     created_at     DATETIME,
     updated_at     DATETIME,
-    deleted_at     DATETIME
+    deleted_at     DATETIME,
+    INDEX idx_owner_parent_name_type (owner_id, parent_id, display_name, item_type)
 );
