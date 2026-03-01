@@ -1,4 +1,4 @@
-package c4.mystorage.presentation;
+package c4.mystorage.presentation.dto;
 
 import c4.mystorage.domain.ItemType;
 import c4.mystorage.domain.StorageItem;
