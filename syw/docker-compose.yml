@@ -27,6 +27,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/mystorage
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root_password
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+    volumes:
+      - storage-data:/app/data/storage/uploads
 
   prometheus:
     image: prom/prometheus:latest
@@ -46,3 +53,6 @@ services:
       - ./infra/grafana/dashboards:/etc/grafana/provisioning/dashboards
     depends_on:
       - prometheus
+
+volumes:
+  storage-data:
