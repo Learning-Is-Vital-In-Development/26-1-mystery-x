@@ -17,5 +17,14 @@ spring:
     init:
       mode: always
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
 storage:
   base-dir: data/storage/uploads
