@@ -8,6 +8,10 @@ group = "c4"
 version = "0.0.1-SNAPSHOT"
 description = "mystorage"
 
+springBoot {
+    mainClass.set("c4.mystorage.MystorageApplication")
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
