@@ -60,6 +60,19 @@ public interface FileMetadataRepository extends JpaRepository<FileMetadata, Long
         """, nativeQuery = true)
     int hardDeleteOlderThan(@Param("threshold") LocalDateTime threshold);
 
+    Optional<FileMetadata> findByIdAndUploadTokenAndDeletedFalse(Long id, String uploadToken);
+
+    @Modifying(clearAutomatically = true)
+    @Query("""
+        UPDATE FileMetadata f
+        SET f.uploadStatus = :status, f.uploadToken = null, f.tokenExpiresAt = null, f.fileSize = :actualSize
+        WHERE f.id = :id AND f.uploadStatus = com.mystorage.domain.UploadStatus.PENDING AND f.uploadToken = :token
+        """)
+    int completeUploadConditional(@Param("id") Long id,
+                                  @Param("token") String token,
+                                  @Param("status") UploadStatus status,
+                                  @Param("actualSize") Long actualSize);
+
     @Query(value = """
         SELECT * FROM file_metadata
         WHERE upload_status IN ('PENDING', 'FAILED') AND created_at < :threshold

@@ -34,6 +34,7 @@ public class FileMetadata {
     @Column(name = "folder_path", columnDefinition = "ltree")
     private String folderPath;
 
+    @Setter
     @Column(name = "file_size", nullable = false)
     private Long fileSize;
 
@@ -57,4 +58,12 @@ public class FileMetadata {
     @Setter
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @Setter
+    @Column(name = "upload_token", length = 64)
+    private String uploadToken;
+
+    @Setter
+    @Column(name = "token_expires_at")
+    private LocalDateTime tokenExpiresAt;
 }

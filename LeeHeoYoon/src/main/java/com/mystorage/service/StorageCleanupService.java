@@ -11,8 +11,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.beans.factory.annotation.Value;
+
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -31,6 +36,9 @@ public class StorageCleanupService {
     private final FileMetadataRepository fileRepo;
     private final FolderRepository folderRepo;
     private final PhysicalStorageManager storageManager;
+
+    @Value("${upload.nginx-tmp-path:/data/storage/.nginx-tmp}")
+    private String nginxTmpPath;
 
     @Scheduled(fixedRate = 5, timeUnit = TimeUnit.MINUTES)
     @Transactional
@@ -73,6 +81,32 @@ public class StorageCleanupService {
         int cleaned = fileRepo.hardDeleteStaleUploads(hardDeleteThreshold);
         if (cleaned > 0) {
             log.info("Cleaned {} stale upload records", cleaned);
+        }
+    }
+
+    @Scheduled(fixedRate = 10, timeUnit = TimeUnit.MINUTES)
+    public void cleanupOrphanNginxTempFiles() {
+        Path nginxTmpDir = Path.of(nginxTmpPath);
+        if (!Files.exists(nginxTmpDir)) return;
+
+        Instant threshold = Instant.now().minus(STALE_UPLOAD_THRESHOLD);
+        try (var walk = Files.walk(nginxTmpDir, 3)) {
+            walk.filter(Files::isRegularFile)
+                .filter(p -> {
+                    try {
+                        return Files.getLastModifiedTime(p).toInstant().isBefore(threshold);
+                    } catch (IOException e) { return false; }
+                })
+                .forEach(p -> {
+                    try {
+                        Files.deleteIfExists(p);
+                        log.info("Cleaned orphan nginx temp: {}", p);
+                    } catch (IOException e) {
+                        log.warn("Failed to clean nginx temp: {}", p, e);
+                    }
+                });
+        } catch (IOException e) {
+            log.warn("Failed to scan nginx temp directory", e);
         }
     }
 }

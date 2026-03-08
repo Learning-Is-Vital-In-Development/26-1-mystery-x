@@ -416,25 +416,64 @@
 
     async function uploadFile() {
         const fileInput = document.getElementById('fileInput');
-        if (!fileInput.files[0]) return;
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        const folderId = getCurrentFolderId();
-        if (folderId) formData.append('folderId', folderId);
+        const file = fileInput.files[0];
+        if (!file) return;
+
         try {
-            const res = await fetch('/api/files', {
+            // Option B: 2단계 업로드 시도
+            const initRes = await fetch('/api/files/init', {
                 method: 'POST',
-                headers: { 'X-User-Id': String(userId) },
-                body: formData
+                headers: jsonHeaders(),
+                body: JSON.stringify({
+                    fileName: file.name,
+                    fileSize: file.size,
+                    contentType: file.type || 'application/octet-stream',
+                    folderId: getCurrentFolderId()
+                })
             });
-            if (res.ok) {
-                showAlert('파일 업로드 요청 완료. 처리 중입니다...', 'info');
-                setTimeout(() => refresh(), 2000);
+
+            if (!initRes.ok) throw new Error('init failed: ' + initRes.status);
+
+            const { metadataId, uploadToken } = await initRes.json();
+
+            const uploadRes = await fetch(`/upload/${metadataId}?token=${uploadToken}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: file
+            });
+
+            if (uploadRes.ok) {
+                showAlert('파일 업로드 완료!');
+                refresh();
             } else {
-                const err = await res.json().catch(() => ({}));
-                showAlert(err.message || '업로드 실패', 'danger');
+                throw new Error('upload failed: ' + uploadRes.status);
             }
-        } catch (e) { showAlert('오류: ' + e.message, 'danger'); }
+        } catch (e) {
+            // Option B 실패 시 기존 multipart 폴백
+            console.warn('Option B upload failed, falling back to multipart:', e.message);
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const folderId = getCurrentFolderId();
+                if (folderId) formData.append('folderId', folderId);
+
+                const res = await fetch('/api/files', {
+                    method: 'POST',
+                    headers: { 'X-User-Id': String(userId) },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    showAlert('파일 업로드 완료 (폴백 모드)', 'info');
+                    setTimeout(() => refresh(), 2000);
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    showAlert(err.message || '업로드 실패', 'danger');
+                }
+            } catch (fallbackErr) {
+                showAlert('업로드 실패: ' + fallbackErr.message, 'danger');
+            }
+        }
         fileInput.value = '';
     }
 

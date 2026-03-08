@@ -2,8 +2,10 @@ package com.mystorage.controller;
 
 import com.mystorage.domain.FileMetadata;
 import com.mystorage.dto.request.CopyRequest;
+import com.mystorage.dto.request.InitUploadRequest;
 import com.mystorage.dto.request.MoveRequest;
 import com.mystorage.dto.response.FileResponse;
+import com.mystorage.dto.response.InitUploadResponse;
 import com.mystorage.service.FileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,16 @@ import java.nio.charset.StandardCharsets;
 public class FileController {
 
     private final FileService fileService;
+
+    @PostMapping("/init")
+    public ResponseEntity<InitUploadResponse> initUpload(
+            @RequestHeader("X-User-Id") Long userId,
+            @Valid @RequestBody InitUploadRequest request) {
+        InitUploadResponse response = fileService.initUpload(
+            userId, request.fileName(), request.fileSize(),
+            request.contentType(), request.folderId());
+        return ResponseEntity.ok(response);
+    }
 
     @PostMapping
     public ResponseEntity<FileResponse> upload(

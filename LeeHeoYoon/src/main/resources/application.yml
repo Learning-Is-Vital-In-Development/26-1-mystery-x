@@ -48,6 +48,11 @@ spring:
 storage:
   base-path: ${STORAGE_BASE_PATH:./storage-data}
 
+upload:
+  callback-secret: ${UPLOAD_CALLBACK_SECRET:OptionB_Shared_Secret_2026}
+  token-ttl-minutes: 30
+  nginx-tmp-path: ${STORAGE_BASE_PATH:/data/storage}/.nginx-tmp
+
 server:
   port: 8080
   shutdown: graceful

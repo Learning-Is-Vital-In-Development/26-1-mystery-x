@@ -33,8 +33,13 @@ CREATE TABLE file_metadata (
     upload_status   VARCHAR(20)  NOT NULL DEFAULT 'PENDING',
     created_at      TIMESTAMP    NOT NULL DEFAULT now(),
     deleted         BOOLEAN      NOT NULL DEFAULT FALSE,
-    deleted_at      TIMESTAMP
+    deleted_at      TIMESTAMP,
+    upload_token    VARCHAR(64),
+    token_expires_at TIMESTAMP
 );
+
+CREATE UNIQUE INDEX idx_files_upload_token
+    ON file_metadata (upload_token) WHERE upload_token IS NOT NULL;
 
 CREATE UNIQUE INDEX uq_file_user_folder_name
     ON file_metadata (user_id, COALESCE(folder_id, -1), original_name)

@@ -6,6 +6,7 @@ import com.mystorage.domain.UploadStatus;
 import com.mystorage.dto.response.FileResponse;
 import com.mystorage.exception.DuplicateNameException;
 import com.mystorage.exception.FolderNotFoundException;
+import com.mystorage.exception.StorageAccessDeniedException;
 import com.mystorage.exception.StorageFileNotFoundException;
 import com.mystorage.exception.StorageIOException;
 import com.mystorage.repository.FileMetadataRepository;
@@ -21,7 +22,12 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.mystorage.dto.request.InitUploadRequest;
+import com.mystorage.dto.response.InitUploadResponse;
+import org.springframework.beans.factory.annotation.Value;
+
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -38,6 +44,15 @@ public class FileService {
     private final FolderRepository folderRepo;
     private final PhysicalStorageManager storageManager;
     private final TransactionTemplate txTemplate;
+
+    @Value("${upload.callback-secret}")
+    private String expectedCallbackSecret;
+
+    @Value("${upload.token-ttl-minutes:30}")
+    private int tokenTtlMinutes;
+
+    @Value("${upload.nginx-tmp-path:/data/storage/.nginx-tmp}")
+    private String nginxTmpPath;
 
     @Transactional
     public FileResponse upload(Long userId, MultipartFile file, Long folderId) {
@@ -112,6 +127,125 @@ public class FileService {
         // 7. 즉시 반환 (202 Accepted)
         return FileResponse.from(metadata);
     }
+
+    // ==================== Option B: 2-Stage Upload ====================
+
+    @Transactional
+    public InitUploadResponse initUpload(Long userId, String originalName, Long fileSize,
+                                          String contentType, Long folderId) {
+        String folderPath = null;
+        if (folderId != null) {
+            Folder folder = getOwnedFolder(userId, folderId);
+            folderPath = folder.getPath();
+        }
+
+        String sanitizedName = sanitizeFilename(originalName);
+
+        if (fileRepo.existsByUserIdAndFolderIdAndOriginalNameAndDeletedFalse(
+                userId, folderId, sanitizedName)) {
+            throw new DuplicateNameException(
+                "File '" + sanitizedName + "' already exists in this folder");
+        }
+
+        String resolvedContentType = resolveContentTypeByName(sanitizedName, contentType);
+        UUID storedName = UUID.randomUUID();
+        String uploadToken = UUID.randomUUID().toString();
+
+        FileMetadata metadata = FileMetadata.builder()
+            .userId(userId)
+            .originalName(sanitizedName)
+            .storedName(storedName)
+            .folderId(folderId)
+            .folderPath(folderPath)
+            .fileSize(fileSize)
+            .contentType(resolvedContentType)
+            .uploadStatus(UploadStatus.PENDING)
+            .build();
+        metadata.setUploadToken(uploadToken);
+        metadata.setTokenExpiresAt(LocalDateTime.now().plusMinutes(tokenTtlMinutes));
+        fileRepo.save(metadata);
+
+        return new InitUploadResponse(metadata.getId(), uploadToken);
+    }
+
+    @Transactional
+    public FileResponse completeUpload(Long metadataId, String uploadToken,
+                                        String tempFilePath, String callbackSecret) {
+        // 1. Shared secret 검증
+        if (!expectedCallbackSecret.equals(callbackSecret)) {
+            throw new StorageAccessDeniedException("Invalid callback secret");
+        }
+
+        // 2. Path traversal 방지 + prefix 검증
+        if (tempFilePath == null || tempFilePath.contains("..")) {
+            throw new StorageAccessDeniedException("Invalid file path");
+        }
+        Path tempFile = Path.of(tempFilePath).normalize();
+        if (!tempFile.startsWith(Path.of(nginxTmpPath).normalize())) {
+            throw new StorageAccessDeniedException("Invalid file path prefix");
+        }
+
+        // 3. 메타데이터 + 토큰 검증
+        FileMetadata metadata = fileRepo.findByIdAndUploadTokenAndDeletedFalse(metadataId, uploadToken)
+            .orElseThrow(() -> new StorageFileNotFoundException("Invalid upload token or metadata"));
+
+        // 4. 토큰 만료 검증
+        if (metadata.getTokenExpiresAt().isBefore(LocalDateTime.now())) {
+            storageManager.deleteTempQuietly(tempFile);
+            throw new StorageAccessDeniedException("Upload token expired");
+        }
+
+        // 5. 상태 검증 (PENDING만 허용)
+        if (metadata.getUploadStatus() != UploadStatus.PENDING) {
+            storageManager.deleteTempQuietly(tempFile);
+            throw new IllegalStateException("Upload already processed");
+        }
+
+        // 6. 실제 파일 크기 확인
+        long actualSize;
+        try {
+            actualSize = Files.size(tempFile);
+        } catch (IOException e) {
+            throw new StorageIOException("Cannot read temp file size", e);
+        }
+
+        // 7. 조건부 UPDATE 먼저 (DB 동시성 제어)
+        int updatedRows = fileRepo.completeUploadConditional(
+            metadataId, uploadToken, UploadStatus.COMPLETED, actualSize);
+        if (updatedRows == 0) {
+            // 이미 다른 요청에서 처리됨
+            storageManager.deleteTempQuietly(tempFile);
+            log.warn("completeUpload race: metadata {} already processed", metadataId);
+            return FileResponse.from(fileRepo.findById(metadataId).orElseThrow());
+        }
+
+        // 8. ATOMIC_MOVE
+        try {
+            storageManager.moveFromTemp(tempFile, metadata.getStoredName());
+        } catch (IOException e) {
+            // MOVE 실패 시 상태 롤백
+            fileRepo.updateUploadStatus(metadataId, UploadStatus.FAILED);
+            storageManager.deleteTempQuietly(tempFile);
+            throw new StorageIOException("Failed to move file to storage", e);
+        }
+
+        return FileResponse.from(fileRepo.findById(metadataId).orElseThrow());
+    }
+
+    private String resolveContentTypeByName(String filename, String clientContentType) {
+        if (filename != null) {
+            try {
+                String probed = java.nio.file.Files.probeContentType(Path.of(filename));
+                if (probed != null) return probed;
+            } catch (IOException ignored) {}
+        }
+        if (clientContentType == null || clientContentType.isBlank()) {
+            return "application/octet-stream";
+        }
+        return clientContentType;
+    }
+
+    // ==================== End Option B ====================
 
     @Transactional(readOnly = true)
     public FileMetadata getFileForDownload(Long userId, Long fileId) {
