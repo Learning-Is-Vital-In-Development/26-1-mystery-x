@@ -31,12 +31,13 @@ const FILE_SIZE = 10 * 1024 * 1024;
 const fileData = new ArrayBuffer(FILE_SIZE);
 
 export default function () {
+    const BASE = __ENV.BASE_URL || 'http://localhost:8888';
     const userId = 1;
     const start = Date.now();
     const filename = `after-${__VU}-${__ITER}-${Date.now()}.bin`;
 
     // Step 1: init (metadata only)
-    const initRes = http.post('http://localhost:8888/api/files/init',
+    const initRes = http.post(`${BASE}/api/files/init`,
         JSON.stringify({
             fileName: filename,
             fileSize: FILE_SIZE,
@@ -62,7 +63,7 @@ export default function () {
 
     // Step 2: upload to Nginx (raw body, no JVM involvement)
     const uploadRes = http.post(
-        `http://localhost:8888/upload/${metadataId}?token=${uploadToken}`,
+        `${BASE}/upload/${metadataId}?token=${uploadToken}`,
         fileData,
         {
             headers: { 'Content-Type': 'application/octet-stream' },

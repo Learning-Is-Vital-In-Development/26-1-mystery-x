@@ -51,7 +51,8 @@ export default function () {
         view[suffixStart + i] = suffix.charCodeAt(i);
     }
 
-    const res = http.post('http://localhost:8888/api/files', body, {
+    const BASE = __ENV.BASE_URL || 'http://localhost:8888';
+    const res = http.post(`${BASE}/api/files`, body, {
         headers: {
             'X-User-Id': String(userId),
             'Content-Type': `multipart/form-data; boundary=${boundary}`,

@@ -25,9 +25,8 @@ services:
   nginx:
     image: nginx:alpine
     container_name: my-storage-nginx
-    user: "1001:1001"
     ports:
-      - "${NGINX_PORT:-8888}:8080"
+      - "${NGINX_PORT:-8888}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - storage-data:/data/storage:rw
@@ -41,7 +40,6 @@ services:
       context: ..
       dockerfile: Dockerfile
     container_name: my-storage-app
-    user: "1001:1001"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-mystorage}
