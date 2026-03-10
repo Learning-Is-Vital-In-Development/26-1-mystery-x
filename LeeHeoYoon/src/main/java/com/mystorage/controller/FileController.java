@@ -52,6 +52,7 @@ public class FileController {
         FileMetadata file = fileService.getFileForDownload(userId, fileId);
         return ResponseEntity.ok()
             .header("X-Accel-Redirect", "/storage-internal/" + file.getStoredName())
+            .header("X-Accel-Limit-Rate", calculateRate(file.getFileSize()))
             .header("Content-Disposition", buildContentDisposition(file.getOriginalName()))
             .header("Content-Type",
                 file.getContentType() != null ? file.getContentType() : "application/octet-stream")
@@ -93,6 +94,22 @@ public class FileController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(fileService.copyFile(userId, fileId, request.targetFolderId()));
+    }
+
+    /**
+     * 파일 크기 기반 동적 다운로드 속도 결정 (bytes/sec 문자열).
+     * X-Accel-Limit-Rate 헤더로 nginx에 전달되어 요청별 limit_rate를 제어한다.
+     * "0" = 무제한, 그 외 = bytes/sec 단위.
+     */
+    private String calculateRate(Long fileSize) {
+        if (fileSize == null) {
+            return String.valueOf(128 * 1024 * 1024); // 128MB/s default
+        }
+        long mb100 = 100L * 1024 * 1024;
+        if (fileSize < mb100) {
+            return "0"; // 100MB 미만: 무제한 (sendfile zero-copy 최대 활용)
+        }
+        return String.valueOf(128 * 1024 * 1024); // 100MB 이상: 128MB/s
     }
 
     /**
