@@ -1,0 +1,28 @@
+### 루트 폴더 생성
+POST http://localhost:8080/folders
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"name": "documents", "parentId": null}
+
+### 하위 폴더 생성 (parentId를 위에서 생성된 폴더 ID로 변경)
+POST http://localhost:8080/folders
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"name": "photos", "parentId": 1}
+
+### 폴더 이름 변경 (folderId를 실제 ID로 변경)
+PATCH http://localhost:8080/folders/1
+X-OWNER-ID: 1
+Content-Type: application/json
+
+{"name": "my-documents"}
+
+### 특정 폴더 내 항목 조회 (folderId를 실제 ID로 변경)
+GET http://localhost:8080/folders/1/items
+X-OWNER-ID: 1
+
+### 루트 항목 조회
+GET http://localhost:8080/folders/root/items
+X-OWNER-ID: 1
