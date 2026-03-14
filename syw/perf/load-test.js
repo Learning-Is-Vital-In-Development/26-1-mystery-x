@@ -6,8 +6,7 @@ import { Trend, Rate } from 'k6/metrics';
 // k6 run perf/load-test.js
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
-const OWNER_ID = '1';
-const HEADERS = { 'Content-Type': 'application/json', 'X-OWNER-ID': OWNER_ID };
+const OWNER_COUNT = parseInt(__ENV.OWNER_COUNT || '5');
 
 // Custom metrics
 const listDuration = new Trend('list_folder_duration', true);
@@ -45,32 +44,63 @@ export const options = {
     },
 };
 
+// setup()에서 owner별 실존 폴더 ID 조회
+export function setup() {
+    const ownerFolderIds = {};
+
+    for (let ownerId = 1; ownerId <= OWNER_COUNT; ownerId++) {
+        const headers = { 'Content-Type': 'application/json', 'X-OWNER-ID': String(ownerId) };
+        const res = http.get(`${BASE_URL}/folders/root/items`, { headers });
+
+        if (res.status === 200) {
+            const items = JSON.parse(res.body);
+            const folderIds = items
+                .filter(i => i.itemType === 'DIRECTORY')
+                .map(i => i.id);
+            ownerFolderIds[ownerId] = folderIds;
+        } else {
+            ownerFolderIds[ownerId] = [];
+        }
+    }
+
+    return { ownerFolderIds };
+}
+
 // 읽기 시나리오: 루트 폴더 목록 + 개별 폴더 조회
-export function readScenario() {
+export function readScenario(data) {
+    const ownerId = (__VU % OWNER_COUNT) + 1;
+    const headers = { 'Content-Type': 'application/json', 'X-OWNER-ID': String(ownerId) };
+    const folderIds = data.ownerFolderIds[ownerId] || [];
+
     group('list root items', () => {
-        const res = http.get(`${BASE_URL}/folders/root/items`, { headers: HEADERS });
+        const res = http.get(`${BASE_URL}/folders/root/items`, { headers });
         const ok = check(res, { 'root list 200': (r) => r.status === 200 });
         errorRate.add(!ok);
         listDuration.add(res.timings.duration);
     });
 
-    // 랜덤 폴더 조회 (1~100 범위)
-    group('list folder items', () => {
-        const folderId = Math.floor(Math.random() * 100) + 1;
-        const res = http.get(`${BASE_URL}/folders/${folderId}/items`, { headers: HEADERS });
-        const ok = check(res, { 'folder list 2xx': (r) => r.status >= 200 && r.status < 300 });
-        errorRate.add(!ok);
-        listDuration.add(res.timings.duration);
-    });
+    // 실존 폴더 중 랜덤 조회
+    if (folderIds.length > 0) {
+        group('list folder items', () => {
+            const folderId = folderIds[Math.floor(Math.random() * folderIds.length)];
+            const res = http.get(`${BASE_URL}/folders/${folderId}/items`, { headers });
+            const ok = check(res, { 'folder list 2xx': (r) => r.status >= 200 && r.status < 300 });
+            errorRate.add(!ok);
+            listDuration.add(res.timings.duration);
+        });
+    }
 
     sleep(0.5);
 }
 
 // 쓰기 시나리오: 폴더 생성
 export function writeScenario() {
+    const ownerId = (__VU % OWNER_COUNT) + 1;
+    const headers = { 'Content-Type': 'application/json', 'X-OWNER-ID': String(ownerId) };
+
     group('create folder', () => {
         const name = `perf-folder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const res = http.post(`${BASE_URL}/folders`, JSON.stringify({ name }), { headers: HEADERS });
+        const res = http.post(`${BASE_URL}/folders`, JSON.stringify({ name }), { headers });
         const ok = check(res, { 'create 200': (r) => r.status === 200 });
         errorRate.add(!ok);
         createDuration.add(res.timings.duration);

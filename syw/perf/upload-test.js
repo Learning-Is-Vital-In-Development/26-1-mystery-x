@@ -6,7 +6,7 @@ import { Trend, Rate } from 'k6/metrics';
 // k6 run perf/upload-test.js
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
-const OWNER_ID = '1';
+const OWNER_COUNT = parseInt(__ENV.OWNER_COUNT || '5');
 
 // 크기별 커스텀 메트릭
 const upload1KB = new Trend('upload_1KB', true);
@@ -15,6 +15,35 @@ const upload1MB = new Trend('upload_1MB', true);
 const upload5MB = new Trend('upload_5MB', true);
 const upload10MB = new Trend('upload_10MB', true);
 const errorRate = new Rate('errors');
+
+// init 단계에서 fixtures 로드 (VU 간 공유, 1회 실행)
+const files1KB = [];
+const files100KB = [];
+const files1MB = [];
+const files5MB = [];
+const files10MB = [];
+
+for (let i = 1; i <= 10; i++) {
+    files1KB.push(open(`fixtures/1KB_${i}.bin`, 'b'));
+    files100KB.push(open(`fixtures/100KB_${i}.bin`, 'b'));
+    files1MB.push(open(`fixtures/1MB_${i}.bin`, 'b'));
+}
+for (let i = 1; i <= 3; i++) {
+    files5MB.push(open(`fixtures/5MB_${i}.bin`, 'b'));
+    files10MB.push(open(`fixtures/10MB_${i}.bin`, 'b'));
+}
+
+function pickRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+const sizeToFiles = {
+    1024: files1KB,
+    102400: files100KB,
+    1048576: files1MB,
+    5242880: files5MB,
+    10485760: files10MB,
+};
 
 export const options = {
     scenarios: {
@@ -84,16 +113,17 @@ export const options = {
 };
 
 function doUpload(sizeBytes, metric) {
+    const ownerId = (__VU % OWNER_COUNT) + 1;
     const tag = `${__VU}-${__ITER}-${Date.now()}`;
-    const fileName = `perf-${sizeBytes}B-${tag}.txt`;
-    const content = 'x'.repeat(sizeBytes);
+    const fileName = `perf-${sizeBytes}B-${tag}.bin`;
+    const content = pickRandom(sizeToFiles[sizeBytes]);
     const payload = JSON.stringify({ itemType: 'FILE' });
 
     const res = http.post(`${BASE_URL}/storage-items`, {
-        file: http.file(content, fileName, 'text/plain'),
+        file: http.file(content, fileName, 'application/octet-stream'),
         payload: http.file(payload, 'payload.json', 'application/json'),
     }, {
-        headers: { 'X-OWNER-ID': OWNER_ID },
+        headers: { 'X-OWNER-ID': String(ownerId) },
     });
 
     const ok = check(res, { 'upload ok': (r) => r.status === 200 });
@@ -102,8 +132,8 @@ function doUpload(sizeBytes, metric) {
     sleep(0.5);
 }
 
-export function upload1KBFile() { doUpload(1 * 1024, upload1KB); }
-export function upload100KBFile() { doUpload(100 * 1024, upload100KB); }
-export function upload1MBFile() { doUpload(1024 * 1024, upload1MB); }
-export function upload5MBFile() { doUpload(5 * 1024 * 1024, upload5MB); }
-export function upload10MBFile() { doUpload(10 * 1024 * 1024, upload10MB); }
+export function upload1KBFile() { doUpload(1024, upload1KB); }
+export function upload100KBFile() { doUpload(102400, upload100KB); }
+export function upload1MBFile() { doUpload(1048576, upload1MB); }
+export function upload5MBFile() { doUpload(5242880, upload5MB); }
+export function upload10MBFile() { doUpload(10485760, upload10MB); }
