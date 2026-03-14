@@ -702,9 +702,9 @@ class StorageServiceTest {
 
     // === Step 3: 복사 ===
 
-    @DisplayName("파일 복사 시 새 DB 레코드와 물리 파일이 생성된다")
+    @DisplayName("파일 복사 시 새 DB 레코드가 생성되고 같은 물리 파일을 공유한다")
     @Test
-    void copyFileCreatesNewRecordAndPhysicalFile() {
+    void copyFileCreatesNewRecordSharingPhysicalFile() {
         StorageService storageService = newStorageService();
         StorageItem folder = storageService.createFolder(1L, "src", null);
         StorageItem destFolder = storageService.createFolder(1L, "dest", null);
@@ -723,7 +723,7 @@ class StorageServiceTest {
                 () -> assertThat(copied.getId()).isNotEqualTo(original.getId()),
                 () -> assertThat(copied.getDisplayName()).isEqualTo("file.txt"),
                 () -> assertThat(copied.getParentId()).isEqualTo(destFolder.getId()),
-                () -> assertThat(copied.getStoredName()).isNotEqualTo(original.getStoredName()),
+                () -> assertThat(copied.getStoredName()).isEqualTo(original.getStoredName()),
                 () -> assertThat(Files.exists(fileManager.resolvePath(copied.getStoredName()))).isTrue()
         );
     }
@@ -815,6 +815,56 @@ class StorageServiceTest {
         assertThatThrownBy(() -> storageService.save(create))
                 .isInstanceOf(StorageException.class)
                 .hasMessageContaining("부모 폴더를 찾을 수 없습니다");
+    }
+
+    @DisplayName("복사된 파일 중 하나를 삭제해도 공유 물리 파일은 유지된다")
+    @Test
+    void deleteCopiedFileKeepsSharedPhysicalFile() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "src", null);
+        StorageItem destFolder = storageService.createFolder(1L, "dest", null);
+
+        byte[] content = "shared-content".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folder.getId(), 1L, "file.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        StorageItem original = storageService.listFolder(1L, folder.getId()).get(0);
+        StorageItem copied = storageService.copyItem(1L, original.getId(), destFolder.getId());
+
+        // 복사본의 storedName으로 삭제 (LIMIT 1으로 하나만 soft delete됨)
+        storageService.delete(1L, copied.getStoredName());
+
+        // 물리 파일은 여전히 존재해야 함 (refCount > 0)
+        assertThat(Files.exists(fileManager.resolvePath(original.getStoredName()))).isTrue();
+    }
+
+    @DisplayName("모든 참조가 삭제되면 물리 파일도 삭제된다")
+    @Test
+    void deleteAllReferencesRemovesPhysicalFile() {
+        StorageService storageService = newStorageService();
+        StorageItem folder = storageService.createFolder(1L, "src", null);
+        StorageItem destFolder = storageService.createFolder(1L, "dest", null);
+
+        byte[] content = "to-be-removed".getBytes(StandardCharsets.UTF_8);
+        storageService.save(new StorageItemCreate(
+                folder.getId(), 1L, "file.txt",
+                new ByteArrayInputStream(content), content.length,
+                ItemType.FILE, "text/plain", null
+        ));
+
+        StorageItem original = storageService.listFolder(1L, folder.getId()).get(0);
+        StorageItem copied = storageService.copyItem(1L, original.getId(), destFolder.getId());
+        String storedName = original.getStoredName();
+
+        // 두 참조 모두 삭제
+        storageService.delete(1L, storedName);
+        storageService.delete(1L, storedName);
+
+        // 모든 참조 삭제 후 물리 파일도 삭제되어야 함
+        assertThat(Files.exists(fileManager.resolvePath(storedName))).isFalse();
     }
 
     private Path writeFile(String storedName, byte[] content) throws IOException {

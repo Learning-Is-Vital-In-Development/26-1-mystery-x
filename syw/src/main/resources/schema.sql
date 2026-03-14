@@ -12,5 +12,6 @@ CREATE TABLE IF NOT EXISTS storage_item
     created_at     DATETIME,
     updated_at     DATETIME,
     deleted_at     DATETIME,
+    INDEX idx_stored_name(stored_name),
     INDEX idx_owner_parent_name_type (owner_id, parent_id, display_name, item_type)
 );

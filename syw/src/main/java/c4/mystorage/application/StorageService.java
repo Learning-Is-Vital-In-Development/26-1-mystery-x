@@ -125,12 +125,14 @@ public class StorageService {
         storageItem.delete();
         repository.save(storageItem);
 
-        try {
-            fileManager.delete(storedName);
-        } catch (Exception e) {
-            storageItem.restore();
-            repository.save(storageItem);
-            throw e;
+        // 참조 카운트 확인 후 물리 파일 삭제
+        long refCount = repository.countByStoredNameAndDeletedAtIsNull(storedName);
+        if (refCount == 0) {
+            try {
+                fileManager.delete(storedName);
+            } catch (Exception e) {
+                // 물리 삭제 실패 시 DB 상태는 유지 (배치에서 재시도)
+            }
         }
     }
 
@@ -217,28 +219,18 @@ public class StorageService {
 
         validateNoDuplicate(ownerId, targetParentId, item.getDisplayName());
 
-        List<String> copiedFiles = new ArrayList<>();
-        try {
-            if (item.isFile()) {
-                return copyFile(item, targetParentId, copiedFiles);
-            }
-            return copyFolder(item, targetParentId, copiedFiles);
-        } catch (Exception e) {
-            cleanupCopiedFiles(copiedFiles, e);
-            throw e;
+        if (item.isFile()) {
+            return copyFile(item, targetParentId);
         }
+        return copyFolder(item, targetParentId);
     }
 
-    private StorageItem copyFile(StorageItem source, Long targetParentId, List<String> copiedFiles) {
-        String newStoredName = uuidGenerator.generate().toString();
-        fileManager.copy(source.getStoredName(), newStoredName);
-        copiedFiles.add(newStoredName);
-
+    private StorageItem copyFile(StorageItem source, Long targetParentId) {
         StorageItem copy = new StorageItem(
                 targetParentId,
                 source.getOwnerId(),
                 source.getDisplayName(),
-                newStoredName,
+                source.getStoredName(),  // 같은 stored_name 공유
                 source.getSize(),
                 ItemType.FILE,
                 source.getContentType(),
@@ -247,7 +239,7 @@ public class StorageService {
         return repository.save(copy);
     }
 
-    private StorageItem copyFolder(StorageItem sourceFolder, Long targetParentId, List<String> copiedFiles) {
+    private StorageItem copyFolder(StorageItem sourceFolder, Long targetParentId) {
         StorageItem newFolder = new StorageItem(
                 targetParentId,
                 sourceFolder.getOwnerId(),
@@ -263,23 +255,13 @@ public class StorageService {
         List<StorageItem> children = repository.findByParentIdAndDeletedAtIsNull(sourceFolder.getId());
         for (StorageItem child : children) {
             if (child.isFile()) {
-                copyFile(child, newFolder.getId(), copiedFiles);
+                copyFile(child, newFolder.getId());
             } else {
-                copyFolder(child, newFolder.getId(), copiedFiles);
+                copyFolder(child, newFolder.getId());
             }
         }
 
         return newFolder;
-    }
-
-    private void cleanupCopiedFiles(List<String> copiedFiles, Exception original) {
-        for (String storedName : copiedFiles) {
-            try {
-                fileManager.delete(storedName);
-            } catch (Exception suppressed) {
-                original.addSuppressed(suppressed);
-            }
-        }
     }
 
     private StorageItem findDirectoryById(Long folderId) {
